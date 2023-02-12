@@ -12,5 +12,5 @@ async def models_list(skip: int = 0,
                       db=Depends(ztp_db_session_stub)):
     models = await model.read_multi(db,
                                     skip=skip,
-                                    limit=limit,)
+                                    limit=limit)
     return models

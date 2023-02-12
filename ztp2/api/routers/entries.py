@@ -12,5 +12,5 @@ async def entries_list(skip: int = 0,
                        db=Depends(ztp_db_session_stub)):
     entries = await entry.read_multi(db,
                                      skip=skip,
-                                     limit=limit,)
+                                     limit=limit)
     return entries

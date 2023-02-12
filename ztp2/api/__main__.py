@@ -19,7 +19,9 @@ parser = ArgumentParser(
 
 group = parser.add_argument_group('Uvicorn')
 group.add_argument('--unix-socket', help='Unix socket to run')
-group.add_argument('--ip-address', help='IP address to serve')
+group.add_argument('--ip-address', help='IP address to serve '
+                                        '(will be ignored if unix socket '
+                                        'is specified)')
 group.add_argument('--port', help='Port to server')
 
 group = parser.add_argument_group('Database')

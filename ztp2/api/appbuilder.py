@@ -5,7 +5,7 @@ from .routers.models import models_router
 
 
 def get_app(docs_url: str = '/docs', redoc_url: str = '/redoc') -> FastAPI:
-    app = FastAPI(docs_url=docs_url, redoc_url=redoc_url, )
+    app = FastAPI(docs_url=docs_url, redoc_url=redoc_url)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
