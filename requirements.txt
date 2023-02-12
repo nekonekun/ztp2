@@ -18,3 +18,6 @@ websockets==10.4
 wheel==0.36.2
 SQLAlchemy[asyncio]==2.0.3
 alembic~=1.9.3
+ztp~=0.0.1
+ztp2~=0.0.1
+ConfigArgParse~=1.5.3
