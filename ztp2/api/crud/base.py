@@ -1,9 +1,9 @@
-from typing import Any, Dict, Generic, List, Optional, Type, TypeVar, Union
+from typing import Any, Generic, Type, TypeVar
 
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
+from sqlalchemy import select
 
 from ztp2.db.models.base import ZTPBase
 
@@ -16,14 +16,14 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     def __init__(self, model: Type[ModelType]):
         self.model = model
 
-    async def read(self, db: AsyncSession, id: Any) -> Optional[ModelType]:
+    async def read(self, db: AsyncSession, id: Any) -> ModelType | None:
         statement = select(self.model).where(self.model.id == id)
         response = await db.execute(statement)
         target_obj = response.scalars().first()
         return target_obj
 
     async def read_multi(self, db: AsyncSession, *,
-                        skip: int = 0, limit: int = 100) -> List[ModelType]:
+                         skip: int = 0, limit: int = 100) -> list[ModelType]:
         statement = select(self.model).offset(skip).limit(limit)
         response = await db.execute(statement)
         target_obj = response.scalars().all()
@@ -43,7 +43,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def update(self, db: AsyncSession, *,
                      db_obj: ModelType,
-                     obj_in: Union[UpdateSchemaType, Dict[str, Any]]
+                     obj_in: UpdateSchemaType | dict[str, Any]
     ) -> ModelType:
         obj_data = jsonable_encoder(db_obj)
         if isinstance(obj_in, dict):
