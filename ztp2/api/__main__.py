@@ -5,8 +5,11 @@ from configargparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import uvicorn
 
 from .appbuilder import get_app
-from .stub import ztp_db_session_stub
-from .dependencies import get_db_session
+from .stub import ztp_db_session_stub, userside_api_stub, snmp_ro_stub, \
+    netbox_session_stub
+from .dependencies import get_db_session, get_userside_api, get_snmp_ro, \
+    get_http_session
+from ..remote_apis.userside import UsersideAPI
 
 ENV_VAR_PREFIX = 'ZTP_'
 
@@ -27,6 +30,19 @@ group.add_argument('--port', help='Port to server')
 group = parser.add_argument_group('Database')
 group.add_argument('--database', help='Main ZTP database', required=True)
 
+group = parser.add_argument_group('Userside')
+group.add_argument('--userside-url', help='Userside URL (including api.php)',
+                   required=True)
+group.add_argument('--userside-key', help='Userside key', required=True)
+
+group = parser.add_argument_group('Netbox')
+group.add_argument('--netbox-url', help='Netbox URL', required=True)
+group.add_argument('--netbox-token', help='Netbox RW token', required=True)
+
+group = parser.add_argument_group('Devices access')
+group.add_argument('--snmp-community-ro', help='SNMP readonly community',
+                   required=True)
+
 
 def main():
     args = parser.parse_args()
@@ -39,6 +55,20 @@ def main():
                                      expire_on_commit=False,
                                      class_=AsyncSession)
     app.dependency_overrides[ztp_db_session_stub] = get_db_session(ztp_session)
+
+    userside_url = args.userside_url
+    userside_key = args.userside_key
+    userside_api = UsersideAPI(userside_url, userside_key)
+    app.dependency_overrides[userside_api_stub] = get_userside_api(userside_api)
+
+    snmp_community = args.snmp_community_ro
+    app.dependency_overrides[snmp_ro_stub] = lambda: get_snmp_ro(snmp_community)
+
+    netbox_url = args.netbox_url
+    netbox_token = args.netbox_token
+    headers = {'Authorization': f'Token {netbox_token}'}
+    app.dependency_overrides[netbox_session_stub] = get_http_session(
+        netbox_url, headers=headers)
 
     uvicorn_params = {'proxy_headers': True,
                       'forwarded_allow_ips': '*'}
