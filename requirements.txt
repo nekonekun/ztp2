@@ -17,7 +17,11 @@ watchfiles==0.18.1
 websockets==10.4
 wheel==0.36.2
 SQLAlchemy[asyncio]==2.0.3
-alembic~=1.9.3
-ztp~=0.0.1
-ztp2~=0.0.1
-ConfigArgParse~=1.5.3
+alembic==1.9.3
+ConfigArgParse==1.5.3
+aiosnmp==0.7.2
+aiohttp==3.8.4
+scrapli==2023.1.30
+celery[redis]==5.2.7
+aiogram==3.0.0b4
+aioftp==0.21.4

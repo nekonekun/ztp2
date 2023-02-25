@@ -52,7 +52,7 @@ setup(
             'ztp-api = ztp2.api.__main__:main',
             'ztp-db = ztp2.db.__main__:main',
             'ztp-celery = ztp2.celery.__main__:main',
-            'ztp-flower = ztp2.bot.__main__:flower',
+            'ztp-flower = ztp2.celery.__main__:flower',
             'ztp-bot = ztp2.bot.__main__:main'
         ]
     },

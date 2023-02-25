@@ -13,18 +13,21 @@ UpdateSchemaType = TypeVar("UpdateSchemaType", bound=BaseModel)
 
 
 class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
-    def __init__(self, model: Type[ModelType]):
-        self.model = model
+    def __init__(self, schema: Type[ModelType]):
+        self._schema = schema
 
     async def read(self, db: AsyncSession, id: Any) -> ModelType | None:
-        statement = select(self.model).where(self.model.id == id)
+        statement = select(self._schema).where(self._schema.id == id)
         response = await db.execute(statement)
         target_obj = response.scalars().first()
         return target_obj
 
-    async def read_multi(self, db: AsyncSession, *,
-                         skip: int = 0, limit: int = 100) -> list[ModelType]:
-        statement = select(self.model).offset(skip).limit(limit)
+    async def read_all(self, db: AsyncSession, *,
+                       skip: int = 0, limit: int = 100) -> list[ModelType]:
+        statement = select(self._schema)\
+            .order_by(self._schema.id.desc())\
+            .offset(skip)\
+            .limit(limit)
         response = await db.execute(statement)
         target_obj = response.scalars().all()
         return target_obj
@@ -36,7 +39,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             obj_in: CreateSchemaType
     ) -> ModelType:
         obj_in_data = jsonable_encoder(obj_in)
-        db_obj = self.model(**obj_in_data)
+        db_obj = self._schema(**obj_in_data)
         db.add(db_obj)
         await db.commit()
         return db_obj
@@ -59,7 +62,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         return db_obj
 
     async def delete(self, db: AsyncSession, *, id: int) -> ModelType:
-        statement = select(self.model).filter_by(id=id)
+        statement = select(self._schema).filter_by(id=id)
         response = await db.execute(statement)
         target_obj = response.scalars().first()
         await db.delete(target_obj)

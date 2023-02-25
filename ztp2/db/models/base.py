@@ -14,7 +14,7 @@ class ZTPBase:
         return cls.__name__.lower()
 
     def __repr__(self):
-        return self.__class__.__name__ + '(' + ', '.join([f'{k}: {v}' for k, v in self.__dict__.items()])
+        return self.__class__.__name__ + '(' + ', '.join([f'{k}: {v}' for k, v in self.__dict__.items()]) + ')'
 
 
 @as_declarative()
@@ -28,4 +28,4 @@ class KeaBase:
         return cls.__name__.lower()
 
     def __repr__(self):
-        return self.__class__.__name__ + '(' + ', '.join([f'{k}: {v}' for k, v in self.__dict__.items()])
+        return self.__class__.__name__ + '(' + ', '.join([f'{k}: {v}' for k, v in self.__dict__.items()]) + ')'
