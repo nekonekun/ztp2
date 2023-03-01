@@ -5,7 +5,7 @@ from sqlalchemy.dialects.postgresql import BYTEA, TEXT, SMALLINT, BIGINT, \
 from .base import KeaBase
 
 
-class Hosts(KeaBase):
+class Host(KeaBase):
     __tablename__ = 'hosts'
     host_id = Column('host_id', Integer, primary_key=True, nullable=False,
                      autoincrement=True)
@@ -25,7 +25,7 @@ class Hosts(KeaBase):
     auth_key = Column('auth_key', VARCHAR(32))
 
 
-class DHCPOptions(KeaBase):
+class DHCPOption(KeaBase):
     __tablename__ = 'dhcp4_options'
     option_id = Column('option_id', Integer, primary_key=True, nullable=False,
                        autoincrement=True)

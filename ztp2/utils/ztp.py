@@ -108,7 +108,7 @@ class DlinkInterface(BaseInterface):
             f'1.3.6.1.2.1.17.7.1.4.3.1.2.{self.management_vlan}')
         hexlen = len(resp[0].value)
         plist = bytes_to_portlist(resp[0].value)
-        plist = list(set(plist) | set([int(self.interface)]))
+        plist = list(set(plist) | {int(self.interface)})
         await self.snmp.set(
             [(f'1.3.6.1.2.1.17.7.1.4.3.1.2.{self.management_vlan}',
               portlist_to_bytes(plist, hexlen))])
@@ -117,11 +117,10 @@ class DlinkInterface(BaseInterface):
             f'1.3.6.1.2.1.17.7.1.4.3.1.4.{self.management_vlan}')
         hexlen = len(resp[0].value)
         plist = bytes_to_portlist(resp[0].value)
-        plist = list(set(plist) | set([int(self.interface)]))
+        plist = list(set(plist) | {int(self.interface)})
         await self.snmp.set(
             [(f'1.3.6.1.2.1.17.7.1.4.3.1.4.{self.management_vlan}',
               portlist_to_bytes(plist, hexlen))])
-
 
     async def switch_back(self):
         # Remove interface from management "untagged ports"
@@ -138,7 +137,7 @@ class DlinkInterface(BaseInterface):
                 f'1.3.6.1.2.1.17.7.1.4.3.1.2.{self.management_vlan}')
         hexlen = len(resp[0].value)
         plist = bytes_to_portlist(resp[0].value)
-        plist = list(set(plist) | set([int(self.interface)]))
+        plist = list(set(plist) | {int(self.interface)})
         await self.snmp.set(
             [(f'1.3.6.1.2.1.17.7.1.4.3.1.2.{self.management_vlan}',
               portlist_to_bytes(plist, hexlen))])
@@ -149,7 +148,7 @@ class DlinkInterface(BaseInterface):
                     f'1.3.6.1.2.1.17.7.1.4.3.1.2.{vlan}')
                 hexlen = len(resp[0].value)
                 plist = bytes_to_portlist(resp[0].value)
-                plist = list(set(plist) | set([int(self.interface)]))
+                plist = list(set(plist) | {int(self.interface)})
                 await self.snmp.set([(f'1.3.6.1.2.1.17.7.1.4.3.1.2.{vlan}',
                                       portlist_to_bytes(plist, hexlen))])
                 # Add interface to "untagged ports"
@@ -157,7 +156,7 @@ class DlinkInterface(BaseInterface):
                     f'1.3.6.1.2.1.17.7.1.4.3.1.4.{vlan}')
                 hexlen = len(resp[0].value)
                 plist = bytes_to_portlist(resp[0].value)
-                plist = list(set(plist) | set([int(self.interface)]))
+                plist = list(set(plist) | {int(self.interface)})
                 await self.snmp.set([(f'1.3.6.1.2.1.17.7.1.4.3.1.4.{vlan}',
                                       portlist_to_bytes(plist, hexlen))])
 

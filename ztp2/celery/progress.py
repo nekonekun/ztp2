@@ -1,5 +1,6 @@
 from aiogram import Bot
 
+
 class Progresser:
     def __init__(self, token: str, *args):
         self.token = token

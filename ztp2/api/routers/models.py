@@ -27,7 +27,7 @@ async def models_create(req: ModelCreateRequest,
 
 @models_router.get('/{model_id}/', response_model=Model)
 async def models_read(model_id: int, db=Depends(ztp_db_session_stub)):
-    entry = await crud.model.get(db=db, id=model_id)
+    entry = await crud.model.read(db=db, id=model_id)
     return entry
 
 

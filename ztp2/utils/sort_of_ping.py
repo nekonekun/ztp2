@@ -1,9 +1,14 @@
 import asyncio
 
 
+TCP_ECHO_PORT = 7
+TCP_TELNET_PORT = 23
+TCP_HTTP_PORT = 80
+
+
 async def check_port(ip_address: str, ports: list[int] | int = None):
     if not ports:
-        ports = [23, 80, 22]
+        ports = [TCP_ECHO_PORT, TCP_TELNET_PORT, TCP_HTTP_PORT]
     elif isinstance(ports, int):
         ports = [ports]
     for port in ports:

@@ -46,7 +46,7 @@ def portlist_to_bytes(portlist: list[int], hexlen: int) -> bytes:
     # bin chunks to bytes chunks (length of 1)
     # ['00010000', '01000000'] -> [b'\x10', b'@']
     resultlist = [int(chunk, 2).to_bytes(1, 'big') for chunk in resultlist]
-    # bytes chunks to bytes
+    # byte chunks to bytes
     return b''.join(resultlist)
 
 
