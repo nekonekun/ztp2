@@ -1,14 +1,15 @@
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio import create_async_engine
+from celery import Celery
 from configargparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import uvicorn
 
 from .appbuilder import get_app
 from .stub import ztp_db_session_stub, userside_api_stub, snmp_ro_stub, \
-    netbox_session_stub
+    netbox_session_stub, celery_stub
 from .dependencies import get_db_session, get_userside_api, get_snmp_ro, \
-    get_http_session
+    get_http_session, get_celery_instance
 from ..remote_apis.userside import UsersideAPI
 
 ENV_VAR_PREFIX = 'ZTP_'
@@ -43,6 +44,10 @@ group = parser.add_argument_group('Devices access')
 group.add_argument('--snmp-community-ro', help='SNMP readonly community',
                    required=True)
 
+group = parser.add_argument_group('Celery')
+group.add_argument('--celery-broker', help='Broker URL', required=True)
+group.add_argument('--celery-result', help='Result backend', required=True)
+
 
 def main():
     args = parser.parse_args()
@@ -69,6 +74,11 @@ def main():
     headers = {'Authorization': f'Token {netbox_token}'}
     app.dependency_overrides[netbox_session_stub] = get_http_session(
         netbox_url, headers=headers)
+
+    celery = Celery(broker=args.celery_broker, backend=args.celery_result)
+    celery.conf.task_track_started = True
+    celery.conf.result_extended = True
+    app.dependency_overrides[celery_stub] = get_celery_instance(celery)
 
     uvicorn_params = {'proxy_headers': True,
                       'forwarded_allow_ips': '*'}

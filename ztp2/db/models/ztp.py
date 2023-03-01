@@ -7,7 +7,7 @@ from sqlalchemy import (
     Enum,
     DateTime
 )
-from sqlalchemy.dialects.postgresql import INET, JSONB, MACADDR
+from sqlalchemy.dialects.postgresql import INET, JSONB, MACADDR, BIGINT
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
@@ -58,3 +58,11 @@ class Model(ZTPBase):
     default_initial_config = Column(String)
     default_full_config = Column(String)
     firmware = Column(String)
+
+
+class User(ZTPBase):
+    __tablename__ = 'users'
+    id = Column(Integer, primary_key=True)
+    userside_id = Column(Integer)
+    name = Column(String)
+    telegram_id = Column(BIGINT)

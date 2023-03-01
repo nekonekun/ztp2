@@ -12,3 +12,7 @@ def snmp_ro_stub():
 
 def netbox_session_stub():
     raise NotImplementedError
+
+
+def celery_stub():
+    raise NotImplementedError

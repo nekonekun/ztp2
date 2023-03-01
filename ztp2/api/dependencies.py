@@ -1,4 +1,5 @@
 import aiohttp
+from celery import Celery
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from ..remote_apis.userside import UsersideAPI
 from ..remote_apis.snmp import DeviceSNMP
@@ -26,4 +27,10 @@ def get_http_session(url: str, **kwargs):
     async def inner():
         async with aiohttp.ClientSession(base_url=url, **kwargs) as session:
             yield session
+    return inner
+
+
+def get_celery_instance(celery: Celery):
+    def inner():
+        return celery
     return inner
