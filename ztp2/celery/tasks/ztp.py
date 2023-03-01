@@ -1,7 +1,7 @@
 import aiohttp
 import aiosnmp.exceptions
 import asyncio
-from celery import Task, current_app, current_task
+from celery import Task, current_app
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from typing import Callable
@@ -26,7 +26,7 @@ DEVICE_DHCP_DELAY = 5
 HUMAN_CONFIGURE_KNOWN_PORT_TIME = 60
 HUMAN_FIND_AND_CONFIGURE_PORT_TIME = 90
 TFTP_LOG_FILENAME = '/tftp/tftp.log'
-DLINK_FIRMWARE_UPDATE_TIME = 310
+DLINK_FIRMWARE_UPDATE_TIME = 195
 
 def stub(*args, **kwargs):  # noqa
     raise NotImplementedError
@@ -49,7 +49,7 @@ class PreparedTask(Task):  # noqa
 
 
 @current_app.task(base=PreparedTask, name='ztp2_main', bind=True)
-def ztp(self, ztp_id: int, sender_chat_id: int):
+def ztp(self, ztp_id: int, sender_chat_id: int):  # noqa
     ztp.loop.run_until_complete(_ztp(ztp_id,
                                      sender_chat_id,
                                      ztp.sessionmaker_factory(),
@@ -68,10 +68,6 @@ async def _ztp(ztp_id: int,
                netbox_factory: Callable[[], aiohttp.ClientSession],
                bot_token: str,
                tftp_factory: Callable[[], ContextedFTP]):
-    # logging.error(current_task.request.id)
-    # current_task.update_state(meta={'started': True})
-    # info = AsyncResult(current_task.request.id).info
-    # logging.error(info)
     progresser = Progresser(bot_token, sender_chat_id)
     progresser.startup()
     await progresser.greet(f'Свич {ztp_id}')
@@ -81,6 +77,12 @@ async def _ztp(ztp_id: int,
         response = await session.execute(statement)
         entry = response.scalars().first()
     progresser.update_done(f'Бот посмотрел данные свича {entry.ip_address}')
+    async with netbox_factory() as session:
+        answer = await get_prefix_info(entry.ip_address.exploded,
+                                       session)
+    management_vlan_id = answer['vlan']['vid']
+    progresser.update_done(f'Бот определил тег менеджмент влана: '
+                           f'{management_vlan_id}')
     if entry.autochange_vlans:
         manual_vlan_change = False
         await progresser.send_step(f'Бот смотрит модель вышестоящего '
@@ -113,12 +115,6 @@ async def _ztp(ztp_id: int,
                 progresser.update_done('Человек нашел и настроил аплинк '
                                        '(скорее всего)')
             else:
-                async with netbox_factory() as session:
-                    answer = await get_prefix_info(entry.ip_address.exploded,
-                                                   session)
-                management_vlan_id = answer['vlan']['vid']
-                progresser.update_done(f'Бот определил тег менеджмент влана: '
-                                       f'{management_vlan_id}')
                 await progresser.send_step(f'Бот смотрит антаги на '
                                            f'{entry.parent_switch} : '
                                            f'{entry.parent_port}')
@@ -138,7 +134,8 @@ async def _ztp(ztp_id: int,
                                  'AsyncIOSXEDriver',
                                  transport='asynctelnet')
                     )
-                untagged = await uplink_interface.get_untagged()
+                async with uplink_interface:
+                    untagged = await uplink_interface.get_untagged()
                 if isinstance(untagged, list):
                     untagged_text = ', '.join(untagged)
                 else:
@@ -150,8 +147,8 @@ async def _ztp(ztp_id: int,
                                        f'{entry.parent_port} '
                                        f'[{untagged_text}]')
                 await progresser.send_step('Бот перенастраивает вышестоящий')
-                await uplink_interface.switch_to_management()
-                # await asyncio.sleep(15)
+                async with uplink_interface:
+                    await uplink_interface.switch_to_management()
                 progresser.update_done('Бот перенастроил вышестоящий')
     else:
         await progresser.send_step('Человек ищет и настраивает аплинк')
@@ -177,7 +174,7 @@ async def _ztp(ztp_id: int,
 
     await progresser.send_step('Свич качает прошивку и шьётся')
     await asyncio.sleep(DLINK_FIRMWARE_UPDATE_TIME)
-    ztp_freezed = False
+    ztp_froze = False
     config_requested_pattern = f'RRQ from {entry.ip_address.exploded} ' \
                                f'filename configs'
     async with tftp_factory() as ftp_client:
@@ -185,7 +182,7 @@ async def _ztp(ztp_id: int,
                                              config_requested_pattern,
                                              ftp_client):
             await progresser.send_step('Свич завис, надо зайти и выйти')
-            ztp_freezed = True
+            ztp_froze = True
             while not await pattern_in_file_content(TFTP_LOG_FILENAME,
                                                     config_requested_pattern,
                                                     ftp_client):
@@ -207,8 +204,8 @@ async def _ztp(ztp_id: int,
                                    '(скорее всего)')
         else:
             await progresser.send_step('Бот перенастраивает вышестоящий')
-            await uplink_interface.switch_back()  # noqa
-            # await asyncio.sleep(15)
+            async with uplink_interface:  # noqa
+                await uplink_interface.switch_back()  # noqa
             progresser.update_done('Бот перенастроил вышестоящий')
     else:
         await progresser.send_step('Человек ищет и настраивает аплинк')
@@ -216,7 +213,7 @@ async def _ztp(ztp_id: int,
         await asyncio.sleep(HUMAN_FIND_AND_CONFIGURE_PORT_TIME)
         progresser.update_done('Человек нашел и настроил аплинк (скорее всего)')
 
-    if not ztp_freezed:
+    if not ztp_froze:
         await progresser.send_step('Свич ребутается после скачивания конфига')
     while not await check_port(entry.ip_address.exploded):
         await asyncio.sleep(CHECK_DELAY)

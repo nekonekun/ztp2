@@ -55,6 +55,8 @@ def main():
     app = celery.Celery(include=['ztp2.celery.tasks.ztp'],
                         broker=args.celery_broker,
                         backend=args.celery_result)
+    app.conf.task_track_started = True
+    app.conf.result_extended = True
 
     PreparedTask.sessionmaker_factory = sessionmaker_factory(args.database)
 
