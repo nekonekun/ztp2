@@ -60,3 +60,16 @@ async def get_vlan(criteria: int | str,
         prefix_info = await get_prefix_info(criteria, session)
         vlan = prefix_info['vlan']
         return str(vlan['vid']), vlan['name'].replace(' ', '')
+
+
+async def get_default_gateway(ip: str, session: aiohttp.ClientSession):
+    prefix = await get_prefix(ip, session)
+    async with session.get(f'/api/ipam/ip-addresses/',
+                           params={'parent': prefix, 'tag': 'gw'}) as response:
+        content = await response.json()
+    possible_ips = content['results']
+    if not possible_ips:
+        raise
+    if len(possible_ips) != 1:
+        raise
+    return ipaddress.IPv4Interface(possible_ips[0]['address'])

@@ -1,10 +1,15 @@
-import logging
 from abc import ABC, abstractmethod
+import aioftp
+import aiohttp
 import aiosnmp
+from jinja2 import Template
 from scrapli.driver.core import AsyncIOSXEDriver
 
 from ..remote_apis.snmp import DeviceSNMP
 from .snmp import get_port_vlans, bytes_to_portlist, portlist_to_bytes
+from ..db.models.ztp import Model, Entry
+from .netbox import get_vlan, get_default_gateway
+from .ftp import get_file_content, upload_file
 
 
 class BaseInterface(ABC):
@@ -174,3 +179,71 @@ class DlinkInterface(BaseInterface):
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.snmp.__aexit__(exc_type, exc_val, exc_tb)
         self.snmp = None
+
+
+def make_config_from_template(template: str, **kwargs):
+    template = Template(template)
+    config = template.render(**kwargs)
+    return config
+
+
+async def gather_initial_configuration_parameters(
+        entry: Entry, model: Model, netbox: aiohttp.ClientSession):
+    vlan_id, vlan_name = await get_vlan(entry.ip_address, netbox)
+    default_gateway = await get_default_gateway(entry.ip_address, netbox)
+    return {
+        'configuration_prefix': model.configuration_prefix,
+        'portcount': model.portcount,
+        'ip_address': entry.ip_address,
+        'management_vlan_id': vlan_id,
+        'management_vlan_name': vlan_name,
+        'subnet_mask': default_gateway.netmask.exploded,
+        'gateway': default_gateway.ip.exploded,
+    }
+
+
+async def generate_initial_config(entry: Entry, model: Model,
+                                  base_folder: str,
+                                  template_filename: str,
+                                  config_filename: str,
+                                  netbox: aiohttp.ClientSession,
+                                  ftp: aioftp.Client):
+    config_filename = base_folder + config_filename
+    template_filename = base_folder + template_filename
+    template = await get_file_content(template_filename, ftp)
+    params = await gather_initial_configuration_parameters(entry, model, netbox)
+    config = make_config_from_template(template, **params)
+    await upload_file(config_filename, config, ftp)
+
+
+def generate_option_125(firmware_filename: str):
+    dlink_id = '00:00:00:AB'
+    suboption_length = hex(1 + 1 + len(firmware_filename))[2:].upper().zfill(2)
+    suboption_code = '01'
+    filename_length = hex(len(firmware_filename))[2:].upper().zfill(2)
+    hex_filename = ':'.join(
+        [hex(ord(letter))[2:].upper().zfill(2)
+         for letter in firmware_filename])
+    answer = dlink_id
+    answer += ':'
+    answer += suboption_length
+    answer += ':'
+    answer += suboption_code
+    answer += ':'
+    answer += filename_length
+    answer += ':'
+    answer += hex_filename
+    return answer
+
+
+def office_dhcp_config_lines(entry_id: int, mac_address: str, ftp_host: str,
+                             config_filename: str, firmware_filename: str):
+    return [
+        'group {',
+        f'option tftp-server-name "{ftp_host}";',
+        f'option bootfile-name "{config_filename}";',
+        f'option option125 {generate_option_125(firmware_filename)};',
+        f'option option150 {ftp_host};',
+        f'host entry_{entry_id} {{ hardware ethernet {mac_address}; }}',
+        '}'
+    ]

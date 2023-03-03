@@ -1,14 +1,15 @@
+import aiosnmp.exceptions
+from fastapi import APIRouter, Depends
 import ipaddress
 import logging
 
-import aiosnmp.exceptions
-from fastapi import APIRouter, Depends
 
 from .. import crud
 from ... import utils
 from ..schemas.entries import Entry, EntryCreateRequest, EntryPatchRequest
 from ..stub import ztp_db_session_stub, userside_api_stub, snmp_ro_stub, \
-    netbox_session_stub
+    netbox_session_stub, celery_stub, kea_db_session_stub, ftp_settings_stub, \
+    contexted_ftp_stub
 
 
 entries_router = APIRouter()
@@ -17,15 +18,19 @@ entries_router = APIRouter()
 @entries_router.post('/', response_model=Entry | None)
 async def entries_create(req: EntryCreateRequest,
                          db=Depends(ztp_db_session_stub),
+                         kea=Depends(kea_db_session_stub),
                          userside_api=Depends(userside_api_stub),
                          snmp_ro=Depends(snmp_ro_stub),
-                         netbox=Depends(netbox_session_stub)):
+                         netbox=Depends(netbox_session_stub),
+                         celery=Depends(celery_stub),
+                         ftp_settings=Depends(ftp_settings_stub),
+                         ftp=Depends(contexted_ftp_stub)):
     mount_type = req.mount_type
 
     # Common parameters
     new_object = {'serial_number': req.serial_number.upper(),
                   'status': 'WAITING', 'employee_id': req.employee_id,
-                  'port_movement': {}}
+                  'port_movements': {}}
     mac_address = [letter
                    for letter in req.mac_address.lower()
                    if letter in '0123456789abcdef']
@@ -58,7 +63,7 @@ async def entries_create(req: EntryCreateRequest,
                                                         userside_api)
     # IP address
     if mount_type == 'changeSwitch':
-        new_object['ip_address'] = req.ip_address
+        new_object['ip_address'] = req.ip_address.exploded
     else:
         if mount_type == 'newSwitch':
             management_prefix = await utils.get_prefix(req.ip_address.exploded,
@@ -138,7 +143,23 @@ async def entries_create(req: EntryCreateRequest,
                         'untagged': []}
             for port in range(1, portcount + 1)
         }
-
+        descriptions = await utils.snmp.get_ports_descriptions(
+            req.ip_address.exploded, snmp_ro)
+        for index, description in descriptions.items():
+            if index in port_settings:
+                port_settings[index]['description'] = description
+            else:
+                port_settings[index] = {'description': description,
+                                        'tagged': [],
+                                        'untagged': []}
+        port_vlans = await utils.snmp.get_port_vlans(req.ip_address.exploded,
+                                                     snmp_ro)
+        for index, port_vlan in port_vlans.items():
+            if index in port_settings:
+                port_settings[index].update(port_vlan)
+            else:
+                port_settings[index] = {'description': '',
+                                        **port_vlan}
     else:
         port_settings = {
             str(port): {'description': '',
@@ -149,7 +170,31 @@ async def entries_create(req: EntryCreateRequest,
     new_object['original_port_settings'] = port_settings.copy()
     new_object['modified_port_settings'] = port_settings.copy()
 
-    return None
+    answer = await crud.entry.create(db, obj_in=new_object)
+
+    default_gateway = await utils.netbox.get_default_gateway(
+        answer.ip_address, netbox)
+
+    initial_config_filepath = f'{ftp_settings.configs_initial_path}' \
+                              f'{answer.ip_address}.cfg'
+    firmware_filepath = ftp_settings.firmwares_path + model_obj.firmware
+
+    ip_obj = ipaddress.ip_address(answer.ip_address)
+
+    await utils.kea.create_host_and_options(
+        kea, answer.mac_address, ip_obj, default_gateway,
+        ftp_settings.host, initial_config_filepath, ftp_settings.host,
+        firmware_filepath)
+
+    initial_template_filepath = f'{ftp_settings.templates_initial_path}' \
+                                f'{model_obj.default_initial_config}'
+    async with ftp as ftp_instance:
+        await utils.ztp.generate_initial_config(
+            answer, model_obj, ftp_settings.tftp_folder,
+            initial_template_filepath, initial_config_filepath, netbox,
+            ftp_instance)
+
+    return answer
 
 
 @entries_router.get('/', response_model=list[Entry])
@@ -170,7 +215,7 @@ async def entries_list(skip: int = 0,
     return entries
 
 
-@entries_router.get('/{entry_id}/', response_model=Entry)
+@entries_router.get('/{entry_id}/', response_model=Entry | None)
 async def entries_read(entry_id: int, db=Depends(ztp_db_session_stub)):
     entry = await crud.entry.read(db=db, id=entry_id)
     return entry

@@ -3,6 +3,7 @@ from celery import Celery
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from ..remote_apis.userside import UsersideAPI
 from ..remote_apis.snmp import DeviceSNMP
+from ..remote_apis.ftp import ContextedFTP
 
 
 def get_db_session(sessionmaker: async_sessionmaker):
@@ -20,7 +21,15 @@ def get_userside_api(userside_api: UsersideAPI):
 
 
 def get_snmp_ro(community_ro: str):
-    return DeviceSNMP(community=community_ro)
+    def inner():
+        return DeviceSNMP(community=community_ro)
+    return inner
+
+
+def get_contexted_ftp_instance(host: str, username: str, password: str):
+    def inner():
+        return ContextedFTP(host, username, password)
+    return inner
 
 
 def get_http_session(url: str, **kwargs):

@@ -16,3 +16,15 @@ def netbox_session_stub():
 
 def celery_stub():
     raise NotImplementedError
+
+
+def kea_db_session_stub():
+    raise NotImplementedError
+
+
+def ftp_settings_stub():
+    raise NotImplementedError
+
+
+def contexted_ftp_stub():
+    raise NotImplementedError
