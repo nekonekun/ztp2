@@ -6,6 +6,8 @@ So we have to prepare values to match KEA format by ourselves
 """
 import ipaddress
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import select, and_, delete
 
 from ..db.models.kea_dhcp import Host, DHCPOption
 
@@ -123,14 +125,27 @@ async def create_host_and_options(db: AsyncSession,
                                   cfg_filename: str,
                                   fw_tftp_server: str,
                                   fw_filename: str):
-    host = Host(**host_params(mac_address, ip_address))  # noqa
-    db.add(host)
-    await db.flush()
+    params = host_params(mac_address, ip_address)
+    stmt = select(Host)
+    stmt = stmt.where(and_(
+        Host.dhcp_identifier == params['dhcp_identifier'],
+        Host.dhcp_identifier_type == params['dhcp_identifier_type'],
+        Host.dhcp4_subnet_id == params['dhcp4_subnet_id']))
+    response = await db.execute(stmt)
+    host = response.scalars().first()
+    if host:
+        stmt = delete(Host).where(Host.host_id == host.host_id)
+        await db.execute(stmt)
+    stmt = insert(Host)
+    stmt = stmt.values(**params)
+    stmt = stmt.returning(Host.host_id)
+    response = await db.execute(stmt)
+    host_id = response.scalars().first()
 
-    host_id = host.host_id
     for option_params in option_params_gen(host_id, default_gateway,
                                            cfg_tftp_server, cfg_filename,
                                            fw_tftp_server, fw_filename):
-        option = DHCPOption(**option_params)  # noqa
-        db.add(option)
+        stmt = insert(DHCPOption)
+        stmt = stmt.values(**option_params)
+        await db.execute(stmt)
     await db.commit()
