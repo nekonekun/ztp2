@@ -83,3 +83,12 @@ async def get_parent_switch_port(ip_address: str, userside_api: UsersideAPI):
     parent_switch_data = parent_switch_data[parent_switch_id]
     parent_switch = parent_switch_data['host']
     return parent_switch, parent_port
+
+
+async def get_inventory_item(serial_number: str, userside_api: UsersideAPI):
+    inv_id = await userside_api.inventory.get_inventory_id(
+        data_typer='serial_number',
+        data_value=serial_number
+    )
+    inv_data = await userside_api.inventory.get_inventory(id=inv_id)
+    return inv_data
