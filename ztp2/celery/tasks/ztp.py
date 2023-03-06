@@ -4,6 +4,7 @@ import asyncio
 from celery import Task, current_app
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
+from threading import Lock
 from typing import Callable
 
 from ..progress import Progresser
@@ -11,9 +12,11 @@ from ...db.models.ztp import Entry
 from ...remote_apis.snmp import DeviceSNMP
 from ...remote_apis.terminal import DeviceTerminal
 from ...remote_apis.ftp import ContextedFTP
+from ...remote_apis.server import ServerTerminalFactory
 from ...utils.ftp import pattern_in_file_content
 from ...utils.netbox import get_prefix_info
-from ...utils.ztp import CiscoInterface, DlinkInterface
+from ...utils.ztp import CiscoInterface, DlinkInterface, \
+    office_dhcp_config_lines
 from ...utils.sort_of_ping import check_port
 
 
@@ -46,6 +49,18 @@ class PreparedTask(Task):  # noqa
 
     def after_return(self, status, retval, task_id, args, kwargs, einfo):
         PreparedTask.loop.close()
+
+
+class RemoteFileModifyTask(Task):  # noqa
+    lock = Lock()
+    server_ssh_factory = stub
+    remote_filename = stub
+
+    def before_start(self, task_id, args, kwargs):
+        self.lock.acquire()
+
+    def after_return(self, status, retval, task_id, args, kwargs, einfo):
+        self.lock.release()
 
 
 @current_app.task(base=PreparedTask, name='ztp2_main', bind=True)
@@ -221,3 +236,22 @@ async def _ztp(ztp_id: int,
 
     await progresser.finish('Готово')
     await progresser.shutdown()
+
+
+@current_app.task(base=RemoteFileModifyTask, name='ztp2_office_dhcp', bind=True)
+def create_dhcp_office_entry(self, entry_id: int, mac_address: str,
+                             ftp_host: str, config_filename: str,
+                             firmware_filename: str):
+    mac_address = ''.join(
+        filter(lambda x: x in '0123456789abcdef', mac_address.lower())
+    )
+    mac_address = [mac_address[i:i+2] for i in range(0, len(mac_address), 2)]
+    mac_address = ':'.join(mac_address)
+    lines = office_dhcp_config_lines(entry_id, mac_address, ftp_host,
+                                     config_filename, firmware_filename)
+    lines = list(map(lambda x: x.replace('"', '\\"'), lines))
+    dhcp_file = self.remote_filename
+    with self.server_ssh_factory() as session:
+        for line in lines:
+            session.send_command(f'echo "{line}" >> {dhcp_file}')
+        session.send_command('sudo /etc/init.d/isc-dhcp-server restart')

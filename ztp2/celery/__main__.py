@@ -2,10 +2,11 @@ from configargparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import celery
 
 from .dependencies import sessionmaker_factory, netbox_session_factory
-from .tasks.ztp import PreparedTask
+from .tasks.ztp import PreparedTask, RemoteFileModifyTask
 from ..remote_apis.ftp import FtpFactory
 from ..remote_apis.snmp import DeviceSNMP
 from ..remote_apis.terminal import DeviceTerminal
+from ..remote_apis.server import ServerTerminalFactory
 
 
 ENV_VAR_PREFIX = 'ZTP_'
@@ -51,6 +52,19 @@ def main():
     group.add_argument('--ftp-username', help='FTP username', required=True)
     group.add_argument('--ftp-password', help='FTP password', required=True)
 
+    group = parser.add_argument_group('DHCP server')
+    group.add_argument('--office-dhcp-host', help='Office DHCP server hostname',
+                       required=True)
+    group.add_argument('--office-dhcp-username',
+                       help='Office DHCP server username',
+                       required=True)
+    group.add_argument('--office-dhcp-password',
+                       help='Office DHCP server password',
+                       required=True)
+    group.add_argument('--office-dhcp-filename',
+                       help='Office DHCP server config filename',
+                       required=True)
+
     args = parser.parse_args()
     app = celery.Celery(include=['ztp2.celery.tasks.ztp'],
                         broker=args.celery_broker,
@@ -75,10 +89,19 @@ def main():
     PreparedTask.ftp_factory = FtpFactory(args.ftp_host, args.ftp_username,
                                           args.ftp_password)
 
+    RemoteFileModifyTask.server_ssh_factory = ServerTerminalFactory(
+        ip_address=args.office_dhcp_host,
+        username=args.office_dhcp_username,
+        password=args.office_dhcp_password
+    )
+    RemoteFileModifyTask.remote_filename = args.office_dhcp_filename
+
     app.start(argv=['worker',
                     '--loglevel=debug',
                     '-E',
                     f'-n {args.celery_hostname}',
+                    '--concurrency=4',
+                    '--pool=threads'
                     ])
 
 
