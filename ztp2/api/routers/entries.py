@@ -194,6 +194,15 @@ async def entries_create(req: EntryCreateRequest,
             initial_template_filepath, initial_config_filepath, netbox,
             ftp_instance)
 
+    celery_task_kwargs = {
+        'entry_id': answer.id,
+        'mac_address': answer.mac_address,
+        'ftp_host': ftp_settings.host,
+        'config_filename': initial_config_filepath,
+        'firmware_filename': firmware_filepath
+     }
+    celery.send_task('ztp2_office_dhcp', kwargs=celery_task_kwargs)
+
     return answer
 
 
