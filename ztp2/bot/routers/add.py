@@ -1,3 +1,5 @@
+import asyncio
+
 from aiogram import Router, types, flags, F
 import aiogram.exceptions
 from aiogram.filters.command import Command
@@ -6,8 +8,11 @@ import aiohttp
 import logging
 
 from ..states.add import PreMode, Mode
+from ..states.manage import Manage
 from ..utils import add as utils
+from ..utils import manage as utils_m
 from ..keyboards import add as keyboards
+from ..keyboards import manage as keyboards_m
 from ..callbacks import add as callbacks
 from ...remote_apis.userside import UsersideAPI
 from ...utils.userside import get_inventory_item
@@ -35,6 +40,7 @@ async def start_add_process(message: types.Message,
     data['_user'] = current_user
     text = utils.make_pre_mode_select_message(data)
     reply_markup = keyboards.gathering_data_keyboard(
+        data['_user'] is not None,
         data['serial_number'] is not None,
         data['mac_address'] is not None)
     msg = await message.answer(text=text, reply_markup=reply_markup)
@@ -70,6 +76,7 @@ async def serial_number_spec(message: types.Message,
         text += f'\nСвич с серийным номером {serial_number} ' \
                 'не найден на складе. Попробуй ещё раз'
         reply_markup = keyboards.gathering_data_keyboard(
+            data['_user'] is not None,
             data['serial_number'] is not None,
             data['mac_address'] is not None)
         await data['_msg'].edit_text(text=text, reply_markup=reply_markup)
@@ -82,6 +89,7 @@ async def serial_number_spec(message: types.Message,
             data['mac_address'] = mac
     text = utils.make_pre_mode_select_message(data)
     reply_markup = keyboards.gathering_data_keyboard(
+        data['_user'] is not None,
         data['serial_number'] is not None,
         data['mac_address'] is not None)
     data['_msg'] = await data['_msg'].edit_text(text=text,
@@ -106,6 +114,7 @@ async def mac_address_spec(message: types.Message,
         text += f'\nТекст {mac_address} не похож на MAC-адрес. ' \
                 f'Попробуй ещё раз'
         reply_markup = keyboards.gathering_data_keyboard(
+            data['_user'] is not None,
             data['serial_number'] is not None,
             data['mac_address'] is not None)
         await data['_msg'].edit_text(text=text, reply_markup=reply_markup)
@@ -118,6 +127,7 @@ async def mac_address_spec(message: types.Message,
     data['_duplicate'] = bool(duplicates) or data['_duplicate']
     text = utils.make_pre_mode_select_message(data)
     reply_markup = keyboards.gathering_data_keyboard(
+        data['_user'] is not None,
         data['serial_number'] is not None,
         data['mac_address'] is not None)
     data['_msg'] = await data['_msg'].edit_text(text=text,
@@ -154,6 +164,7 @@ async def employee_spec(message: types.Message,
         await state.set_state(PreMode.waiting_for_mac)
     text = utils.make_pre_mode_select_message(data)
     reply_markup = keyboards.gathering_data_keyboard(
+        data['_user'] is not None,
         data['serial_number'] is not None,
         data['mac_address'] is not None)
     data['_msg'] = await data['_msg'].edit_text(text=text,
@@ -183,6 +194,7 @@ async def change_some_data(query: types.CallbackQuery,
         await state.set_state(PreMode.waiting_for_employee)
     text = utils.make_pre_mode_select_message(data)
     reply_markup = keyboards.gathering_data_keyboard(
+        data['_user'] is not None,
         data['serial_number'] is not None,
         data['mac_address'] is not None)
     data['_msg'] = await data['_msg'].edit_text(text=text,
@@ -194,7 +206,6 @@ async def change_some_data(query: types.CallbackQuery,
 async def select_mode(query: types.CallbackQuery,
                       callback_data: callbacks.ModeData,
                       state: FSMContext):
-    await query.answer()
     data = await state.get_data()
     if callback_data.mode == 'change_switch':
         data['mode'] = 'change_switch'
@@ -203,8 +214,11 @@ async def select_mode(query: types.CallbackQuery,
         data['mode'] = 'new_switch'
         await state.set_state(Mode.waiting_for_parent)
     elif callback_data.mode == 'new_house':
-        data['mode'] = 'new_house'
-        await state.set_state(Mode.waiting_for_task)
+        await query.answer('Запуск новых домов пока недоступен')
+        return
+        # data['mode'] = 'new_house'
+        # await state.set_state(Mode.waiting_for_task)
+    await query.answer()
     text = utils.make_mode_select_message(data)
     data['_msg'] = await data['_msg'].edit_text(text)
     await state.set_data(data)
@@ -254,5 +268,71 @@ async def ip_address_spec(message: types.Message,
     data['node_id'] = node_id
     data['node_name'] = node_data[str(node_id)]['name']
     text = utils.make_confirmation_text(data)
-    data['_msg'] = await data['_msg'].edit_text(text=text)
+    reply_markup = keyboards.confirmation_keyboard()
+    data['_msg'] = await data['_msg'].edit_text(text=text,
+                                                reply_markup=reply_markup)
     await state.set_data(data)
+
+
+@router.callback_query(
+    callbacks.ConfirmationData.filter(F.confirm == True),  # noqa
+    state=Mode, flags={'long_operation': 'choose_sticker'})
+@flags.is_using_api_session
+async def confirm_check(query: types.CallbackQuery,
+                        state: FSMContext,
+                        api_session: aiohttp.ClientSession):
+    await query.answer()
+    data = await state.get_data()
+    body = {'employeeId': data['_user']['userside_id'],
+            'serial': data['serial_number'],
+            'mac': data['mac_address']}
+    mode = data['mode']
+    if mode == 'change_switch':
+        body['mountType'] = 'changeSwitch'
+        body['ip'] = data['ip_address']
+    elif mode == 'new_switch':
+        body['mountType'] = 'newSwitch'
+        body['ip'] = data['ip_address']
+        body['port'] = data['port']
+    async with api_session.post('/entries/', json=body) as response:
+        entry = await response.json()
+    async with api_session.get(f'/models/{entry["model_id"]}/') as response:
+        content = await response.json()
+    model = content['model']
+    entry['model'] = model
+    data.update(entry)
+    data = {k: v
+            for k, v in data.items()
+            if (k[1] != '_') or (k in ['_msg', '_user'])}
+    text = utils_m.make_main_manage_message(data)
+    reply_markup = keyboards_m.main_keyboard(
+        data['celery_id'] is not None,
+        data['employee_id'] == data['_user']['userside_id'],
+        False
+    )
+    data['_msg'] = await data['_msg'].edit_text(text=text,
+                                                reply_markup=reply_markup)
+    await state.set_state(Manage.main)
+    await state.set_data(data)
+
+
+@router.callback_query(callbacks.ConfirmationData.filter(
+    F.confirm == False), state=Mode)  # noqa
+@flags.is_using_api_session
+async def confirm_back(query: types.CallbackQuery,
+                       state: FSMContext):
+    await query.answer('Возвращаемся обратно')
+    data = await state.get_data()
+    fields = ['ip_address', 'port', 'task_id', 'node_id', 'mode']
+    for field in fields:
+        if data.get(field):
+            data.pop(field)
+    text = utils.make_pre_mode_select_message(data)
+    reply_markup = keyboards.gathering_data_keyboard(
+        data['_user'] is not None,
+        data['serial_number'] is not None,
+        data['mac_address'] is not None)
+    data['_msg'] = await data['_msg'].edit_text(text=text,
+                                                reply_markup=reply_markup)
+    await state.set_data(data)
+    await state.set_state(PreMode.waiting_for_serial)

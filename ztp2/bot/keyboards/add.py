@@ -1,10 +1,16 @@
 from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardButton
-from ..callbacks.add import ChangeData, ModeData
+from ..callbacks.add import ChangeData, ModeData, ConfirmationData
 
 
-def gathering_data_keyboard(is_serial_specified: bool = False,
+def gathering_data_keyboard(is_employee_specified: bool = False,
+                            is_serial_specified: bool = False,
                             is_mac_specified: bool = False):
     builder = InlineKeyboardBuilder()
+    if not is_employee_specified:
+        builder.row(InlineKeyboardButton(
+            text='Другой сотрудник',
+            callback_data=ChangeData(field='employee_id').pack()))
+        return builder.as_markup()
     if is_mac_specified and is_serial_specified:
         change_switch = InlineKeyboardButton(
             text='Замена',
@@ -30,3 +36,12 @@ def gathering_data_keyboard(is_serial_specified: bool = False,
     return builder.as_markup()
 
 
+def confirmation_keyboard():
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text='Всё правильно',
+        callback_data=ConfirmationData(confirm=True).pack()))
+    builder.row(InlineKeyboardButton(
+        text='Хочу что-нибудь изменить',
+        callback_data=ConfirmationData(confirm=False).pack()))
+    return builder.as_markup()

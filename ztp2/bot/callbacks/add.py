@@ -7,3 +7,7 @@ class ChangeData(CallbackData, prefix='add_change'):
 
 class ModeData(CallbackData, prefix='add_mode'):
     mode: str
+
+
+class ConfirmationData(CallbackData, prefix='add_confirm'):
+    confirm: bool

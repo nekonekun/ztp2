@@ -6,7 +6,7 @@ import logging
 
 from .dependencies import ApiSessionFactory
 from .middlewares import ApiSessionMiddleware, AuthMiddleware, \
-    UsersideMiddleware
+    UsersideMiddleware, ChatActionMiddleware
 from .routers import manage_router, add_router
 from ..remote_apis.userside import UsersideAPI
 
@@ -67,6 +67,8 @@ async def bot_main(token: str, api_session_factory: ApiSessionFactory,
 
     dp.message.middleware(ApiSessionMiddleware(api_session_factory))
     dp.callback_query.middleware(ApiSessionMiddleware(api_session_factory))
+    dp.message.middleware(ChatActionMiddleware())
+    dp.callback_query.middleware(ChatActionMiddleware())
     dp.message.middleware(AuthMiddleware(api_session_factory))
     dp.message.middleware(UsersideMiddleware(userside_api))
 

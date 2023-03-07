@@ -106,7 +106,7 @@ async def selecting_switch(message: types.Message,
         if not content:
             text = data['_msg'].text
             text += '\n\nСвич с таким номером не найден'
-            await data['msg'].edit_text(text=text)
+            await data['_msg'].edit_text(text=text)
             return
         entry = content
     elif utils.is_ip_address(message.text):
@@ -118,13 +118,13 @@ async def selecting_switch(message: types.Message,
         if not content:
             text = data['_msg'].text
             text += '\n\nСвич с таким IP-адресом не найден'
-            await data['msg'].edit_text(text=text)
+            await data['_msg'].edit_text(text=text)
             return
         entry = content[0]
     else:
         text = data['_msg'].text
         text += '\n\nВведённый текст не похож ни на IP-адрес, ни на номер свича'
-        await data['msg'].edit_text(text=text)
+        await data['_msg'].edit_text(text=text)
         return
     async with api_session.get(f'/models/{entry["model_id"]}/') as response:
         content = await response.json()
