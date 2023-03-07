@@ -122,7 +122,7 @@ async def entries_create(req: EntryCreateRequest,
             for vlan_id, vlan_name in vlans.items():
                 vlan_settings[vlan_id] = vlan_name
         except aiosnmp.exceptions.SnmpTimeoutError:
-            logging.error('SNMP timeout error while gathering VLANs')
+            logging.error('Timeout while reading old switch vlans')
     new_object['vlan_settings'] = vlan_settings.copy()
     new_object['modified_vlan_settings'] = vlan_settings.copy()
 
@@ -143,23 +143,31 @@ async def entries_create(req: EntryCreateRequest,
                         'untagged': []}
             for port in range(1, portcount + 1)
         }
-        descriptions = await utils.snmp.get_ports_descriptions(
-            req.ip_address.exploded, snmp_ro)
-        for index, description in descriptions.items():
-            if index in port_settings:
-                port_settings[index]['description'] = description
-            else:
-                port_settings[index] = {'description': description,
-                                        'tagged': [],
-                                        'untagged': []}
-        port_vlans = await utils.snmp.get_port_vlans(req.ip_address.exploded,
-                                                     snmp_ro)
-        for index, port_vlan in port_vlans.items():
-            if index in port_settings:
-                port_settings[index].update(port_vlan)
-            else:
-                port_settings[index] = {'description': '',
-                                        **port_vlan}
+        try:
+            descriptions = await utils.snmp.get_ports_descriptions(
+                req.ip_address.exploded, snmp_ro)
+        except aiosnmp.exceptions.SnmpTimeoutError:
+            logging.error('Timeout while reading old switch descriptions')
+        else:
+            for index, description in descriptions.items():
+                if index in port_settings:
+                    port_settings[index]['description'] = description
+                else:
+                    port_settings[index] = {'description': description,
+                                            'tagged': [],
+                                            'untagged': []}
+        try:
+            port_vlans = await utils.snmp.get_port_vlans(req.ip_address.exploded,
+                                                         snmp_ro)
+        except aiosnmp.exceptions.SnmpTimeoutError:
+            logging.error('Timeout while reading old switch vlans')
+        else:
+            for index, port_vlan in port_vlans.items():
+                if index in port_settings:
+                    port_settings[index].update(port_vlan)
+                else:
+                    port_settings[index] = {'description': '',
+                                            **port_vlan}
     else:
         port_settings = {
             str(port): {'description': '',
