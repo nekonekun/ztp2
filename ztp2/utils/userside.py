@@ -1,7 +1,27 @@
-import pprint
+from enum import Enum
 import re
 
 from ztp2.remote_apis.userside import UsersideAPI
+
+
+class InventoryStorage(Enum):
+    Supplier = '101'
+    Warehouse = '204'
+    Subscriber = '205'
+    Node = '206'
+    CableLine = '210'
+    Task = '212'
+    Building = '213'
+    Employee = '215'
+    Decommissioned = '900'
+
+
+class SubAccount(Enum):
+    SubreportLong = '01'
+    SubreportShort = '02'
+    Supplies = '03'
+    Rent = '08'
+    SoldAccounting = '09'
 
 
 async def get_device_model(serial_number: str, userside_api: UsersideAPI):
@@ -92,3 +112,14 @@ async def get_inventory_item(serial_number: str, userside_api: UsersideAPI):
     )
     inv_data = await userside_api.inventory.get_inventory(id=inv_id)
     return inv_data
+
+
+async def transfer_inventory_to_employee(inventory_id: int,
+                                         employee_id: int,
+                                         userside_api: UsersideAPI):
+    dst_account = InventoryStorage.Employee.value \
+                  + SubAccount.Supplies.value \
+                  + str(employee_id).zfill(7)
+    await userside_api.inventory.transfer_inventory(inventory_id=inventory_id,
+                                                    dst_account=dst_account,
+                                                    employee_id=employee_id)

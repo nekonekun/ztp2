@@ -71,5 +71,6 @@ async def bot_main(token: str, api_session_factory: ApiSessionFactory,
     dp.callback_query.middleware(ChatActionMiddleware())
     dp.message.middleware(AuthMiddleware(api_session_factory))
     dp.message.middleware(UsersideMiddleware(userside_api))
+    dp.callback_query.middleware(UsersideMiddleware(userside_api))
 
     await dp.start_polling(bot)

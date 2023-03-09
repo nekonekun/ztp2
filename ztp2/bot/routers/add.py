@@ -1,5 +1,3 @@
-import asyncio
-
 from aiogram import Router, types, flags, F
 import aiogram.exceptions
 from aiogram.filters.command import Command
@@ -15,7 +13,7 @@ from ..keyboards import add as keyboards
 from ..keyboards import manage as keyboards_m
 from ..callbacks import add as callbacks
 from ...remote_apis.userside import UsersideAPI
-from ...utils.userside import get_inventory_item
+from ...utils.userside import get_inventory_item, transfer_inventory_to_employee
 
 
 router = Router()
@@ -87,6 +85,8 @@ async def serial_number_spec(message: types.Message,
         mac = arg.get('mac')
         if mac:
             data['mac_address'] = mac
+    inventory_id = inventory_item.get('id')
+    data['inventory_id'] = inventory_id
     text = utils.make_pre_mode_select_message(data)
     reply_markup = keyboards.gathering_data_keyboard(
         data['_user'] is not None,
@@ -226,7 +226,6 @@ async def select_mode(query: types.CallbackQuery,
 
 @router.message(state=Mode.waiting_for_ip_address)
 @router.message(state=Mode.waiting_for_parent)
-@flags.is_using_api_session
 @flags.is_using_userside
 async def ip_address_spec(message: types.Message,
                           state: FSMContext,
@@ -277,10 +276,12 @@ async def ip_address_spec(message: types.Message,
 @router.callback_query(
     callbacks.ConfirmationData.filter(F.confirm == True),  # noqa
     state=Mode, flags={'long_operation': 'choose_sticker'})
+@flags.is_using_userside
 @flags.is_using_api_session
 async def confirm_check(query: types.CallbackQuery,
                         state: FSMContext,
-                        api_session: aiohttp.ClientSession):
+                        api_session: aiohttp.ClientSession,
+                        userside_api: UsersideAPI):
     await query.answer()
     data = await state.get_data()
     body = {'employeeId': data['_user']['userside_id'],
@@ -294,6 +295,10 @@ async def confirm_check(query: types.CallbackQuery,
         body['mountType'] = 'newSwitch'
         body['ip'] = data['ip_address']
         body['port'] = data['port']
+    async with userside_api:
+        await transfer_inventory_to_employee(data['inventory_id'],
+                                             data['_user']['userside_id'],
+                                             userside_api)
     async with api_session.post('/entries/', json=body) as response:
         entry = await response.json()
     async with api_session.get(f'/models/{entry["model_id"]}/') as response:
@@ -304,10 +309,9 @@ async def confirm_check(query: types.CallbackQuery,
     data = {k: v
             for k, v in data.items()
             if (k[1] != '_') or (k in ['_msg', '_user'])}
-    text = utils_m.make_main_manage_message(data)
+    text = utils_m.make_main_manage_message(data, data['_user'])
     reply_markup = keyboards_m.main_keyboard(
         data['celery_id'] is not None,
-        data['employee_id'] == data['_user']['userside_id'],
         False
     )
     data['_msg'] = await data['_msg'].edit_text(text=text,

@@ -32,16 +32,18 @@ def is_ip_address(text: str):
     return True
 
 
-def make_main_manage_message(entry: dict[str, Any]):
+def make_main_manage_message(entry: dict[str, Any],
+                             user: dict[str, Any]):
     text = f'Свич {entry["id"]}\n'
+    text += f'Находится у сотрудника {user["name"]}\n'
     text += f'IP адрес: {entry["ip_address"]}\n'
     text += f'Серийный номер: {entry["serial_number"]}\n'
     text += f'MAC адрес: {entry["mac_address"]}\n'
     parent_switch = entry['parent_switch'] or '?'
     parent_port = entry['parent_port'] or '?'
     text += f'Подключен от {parent_switch} : {parent_port}\n'
-    autochange = 'включено' if entry['autochange_vlans'] else 'отключено'
-    text += f'Автоперевешивание влана {autochange}'
+    # autochange = 'включено' if entry['autochange_vlans'] else 'отключено'
+    # text += f'Автоперевешивание влана {autochange}'
     return text
 
 
