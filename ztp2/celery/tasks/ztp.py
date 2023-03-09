@@ -2,9 +2,9 @@ import aiohttp
 import aiosnmp.exceptions
 import asyncio
 from celery import Task, current_app
+from multiprocessing import Lock
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
-from threading import Lock
 from typing import Callable
 
 from ..progress import Progresser

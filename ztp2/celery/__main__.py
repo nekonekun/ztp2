@@ -101,7 +101,7 @@ def main():
                     '-E',
                     f'-n {args.celery_hostname}',
                     '--concurrency=4',
-                    '--pool=threads'
+                    '--pool=prefork'
                     ])
 
 
