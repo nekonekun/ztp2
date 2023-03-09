@@ -308,7 +308,7 @@ async def confirm_check(query: types.CallbackQuery,
     data.update(entry)
     data = {k: v
             for k, v in data.items()
-            if (k[1] != '_') or (k in ['_msg', '_user'])}
+            if (k[0] != '_') or (k in ['_msg', '_user'])}
     text = utils_m.make_main_manage_message(data, data['_user'])
     reply_markup = keyboards_m.main_keyboard(
         data['celery_id'] is not None,

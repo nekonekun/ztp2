@@ -94,9 +94,9 @@ async def edit_switch_list(query: types.CallbackQuery,
 
 @router.message(state=Manage.selecting_switch)
 @flags.is_using_api_session
-async def selecting_switch(message: types.Message,
-                           state: FSMContext,
-                           api_session: aiohttp.ClientSession):
+async def choose_switch(message: types.Message,
+                        state: FSMContext,
+                        api_session: aiohttp.ClientSession):
     data = await state.get_data()
     if data['_is_admin']:
         await message.delete()
@@ -130,16 +130,20 @@ async def selecting_switch(message: types.Message,
         content = await response.json()
     model = content['model']
     entry['model'] = model
+    async with api_session.get(
+            '/users/',
+            params={'userside_id': entry['employee_id']}) as response:
+        content = await response.json()
+    data['owner'] = content[0]
     data.update(entry)
     data = {k: v
             for k, v in data.items()
-            if (k[1] != '_') or (k in ['_msg', '_user'])}
+            if (k[0] != '_') or (k in ['_msg', '_user'])}
     await state.set_state(Manage.main)
     await state.set_data(data)
-    text = utils.make_main_manage_message(data)
+    text = utils.make_main_manage_message(data, data['owner'])
     reply_markup = keyboards.main_keyboard(
         data['celery_id'] is not None,
-        data['employee_id'] == data['_user']['userside_id'],
         False
     )
     await data['_msg'].edit_text(text=text, reply_markup=reply_markup)
@@ -147,26 +151,32 @@ async def selecting_switch(message: types.Message,
 
 @router.callback_query(callbacks.ManageData.filter(F.cat == 'ztp'))
 @flags.is_using_api_session
-async def edit_switch_list(query: types.CallbackQuery,
-                           state: FSMContext,
-                           callback_data: callbacks.ManageData,
-                           api_session: aiohttp.ClientSession):
+async def ztp_control(query: types.CallbackQuery,
+                      state: FSMContext,
+                      callback_data: callbacks.ManageData,
+                      api_session: aiohttp.ClientSession):
     await query.answer()
     data = await state.get_data()
     action = callback_data.action
-    if action == 'start':
+    if action == 'start_ztp':
         task_id = await utils.start_ztp(api_session,
                                         data['id'],
                                         query.message.chat.id)
         data['celery_id'] = task_id
         await state.set_data(data)
-    elif action == 'stop':
+    elif action == 'stop_ztp':
         await utils.stop_ztp(api_session, data['celery_id'])
         data['celery_id'] = None
         await state.set_data(data)
     reply_markup = keyboards.main_keyboard(
         data['celery_id'] is not None,
-        data['employee_id'] == data['_user']['userside_id'],
         False
     )
     await data['_msg'].edit_reply_markup(reply_markup=reply_markup)
+
+
+@router.callback_query(callbacks.ScreenData.filter())
+async def switch_to_screen(query: types.CallbackQuery,
+                           state: FSMContext,
+                           callback_data: callbacks.ManageData):
+    pass

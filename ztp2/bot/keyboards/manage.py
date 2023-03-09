@@ -1,5 +1,5 @@
 from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardButton
-from ..callbacks.manage import SelectData, ManageData
+from ..callbacks.manage import SelectData, ManageData, ScreenData
 
 
 def selecting_keyboard(is_employee_specified: bool = True,
@@ -43,20 +43,30 @@ def selecting_keyboard(is_employee_specified: bool = True,
 
 
 def main_keyboard(is_ztp_started: bool,
-                  is_own_switch: bool,
                   is_config_prepared):
     builder = InlineKeyboardBuilder()
     if is_ztp_started:
         row = [
             InlineKeyboardButton(
                 text='Остановить ZTP',
-                callback_data=ManageData(cat='ztp', action='stop').pack())
+                callback_data=ManageData(cat='ztp', action='stop_ztp').pack())
         ]
     else:
         row = [
             InlineKeyboardButton(
                 text='Начать ZTP',
-                callback_data=ManageData(cat='ztp', action='start').pack())
+                callback_data=ManageData(cat='ztp', action='start_ztp').pack())
         ]
     builder.row(*row)
+    row = [
+        InlineKeyboardButton(
+            text='Настройки',
+            callback_data=ScreenData(screen='parameters').pack())
+    ]
+    builder.row(*row)
     return builder.as_markup()
+
+
+def parameters_keyboard():
+    builder = InlineKeyboardBuilder()
+

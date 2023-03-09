@@ -10,3 +10,7 @@ class ManageData(CallbackData, prefix='manage'):
     cat: str
     action: str
     params: str | None
+
+
+class ScreenData(CallbackData, prefix='manage_goto'):
+    screen: str
