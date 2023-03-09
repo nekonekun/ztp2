@@ -152,7 +152,7 @@ async def _ztp(ztp_id: int,
                 async with uplink_interface:
                     untagged = await uplink_interface.get_untagged()
                 if isinstance(untagged, list):
-                    untagged_text = ', '.join(untagged)
+                    untagged_text = ', '.join(map(str, untagged))
                 else:
                     untagged_text = untagged
                 if not untagged_text:
