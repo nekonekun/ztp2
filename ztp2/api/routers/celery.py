@@ -31,20 +31,26 @@ async def celery_list(celery=Depends(celery_stub)):
     return active_tasks
 
 
-@celery_router.get('/{celery_id}/', response_model=Task)
+@celery_router.get('/{celery_id}/', response_model=Task | None)
 async def celery_get_task_info(celery_id: str,
                                celery=Depends(celery_stub)):
     task = AsyncResult(id=celery_id, app=celery)
-    response = Task(task_id=task.task_id, name=task.name, status=task.status,
-                    args=task.args, kwargs=task.kwargs, info=task.info)
+    if task.task_id:
+        response = Task(task_id=task.task_id, name=task.name, status=task.status,
+                        args=task.args, kwargs=task.kwargs, info=task.info)
+    else:
+        response = None
     return response
 
 
-@celery_router.delete('/{celery_id}/', response_model=Task)
+@celery_router.delete('/{celery_id}/', response_model=Task | None)
 async def celery_revoke_task(celery_id: str,
                              celery=Depends(celery_stub)):
     task = AsyncResult(id=celery_id, app=celery)
-    response = Task(task_id=task.task_id, name=task.name, status=task.status,
-                    args=task.args, kwargs=task.kwargs, info=task.info)
+    if task.task_id:
+        response = Task(task_id=task.task_id, name=task.name, status=task.status,
+                        args=task.args, kwargs=task.kwargs, info=task.info)
+    else:
+        response = None
     task.revoke(terminate=True)
     return response
