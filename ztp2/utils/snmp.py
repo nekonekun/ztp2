@@ -96,8 +96,8 @@ async def get_port_vlans(ip_address: str, snmp: DeviceSNMP):
     for vlan, port_list in all_ports.items():
         for port in port_list:
             if port not in untag_ports[vlan]:
-                result[str(port)]['tagged'].append(vlan)
+                result[str(port)]['tagged'].append(int(vlan))
     for vlan, port_list in untag_ports.items():
         for port in port_list:
-            result[str(port)]['untagged'].append(vlan)
+            result[str(port)]['untagged'].append(int(vlan))
     return result
