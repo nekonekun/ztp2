@@ -136,6 +136,15 @@ async def create_host_and_options(db: AsyncSession,
     if host:
         stmt = delete(Host).where(Host.host_id == host.host_id)
         await db.execute(stmt)
+    stmt = select(Host)
+    stmt = stmt.where(and_(
+        Host.dhcp4_subnet_id == params['dhcp4_subnet_id'],
+        Host.ipv4_address == params['ipv4_address']))
+    response = await db.execute(stmt)
+    host = response.scalars().first()
+    if host:
+        stmt = delete(Host).where(Host.host_id == host.host_id)
+        await db.execute(stmt)
     stmt = insert(Host)
     stmt = stmt.values(**params)
     stmt = stmt.returning(Host.host_id)
