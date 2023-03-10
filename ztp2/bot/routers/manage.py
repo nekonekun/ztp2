@@ -7,6 +7,7 @@ import logging
 
 from ..states.manage import Manage
 from ..utils import manage as utils
+from ..utils import common as utils_c
 from ..keyboards import manage as keyboards
 from ..callbacks import manage as callbacks
 
@@ -126,26 +127,13 @@ async def choose_switch(message: types.Message,
         text += '\n\nВведённый текст не похож ни на IP-адрес, ни на номер свича'
         await data['_msg'].edit_text(text=text)
         return
-    async with api_session.get(f'/models/{entry["model_id"]}/') as response:
-        content = await response.json()
-    model = content['model']
-    entry['model'] = model
-    async with api_session.get(
-            '/users/',
-            params={'userside_id': entry['employee_id']}) as response:
-        content = await response.json()
-    data['owner'] = content[0]
-    data.update(entry)
-    data = {k: v
-            for k, v in data.items()
-            if (k[0] != '_') or (k in ['_msg', '_user'])}
+    data = await utils.make_switch_data(data['_msg'], data['_user'],
+                                        data['_is_admin'], entry, api_session)
+    data = utils_c.filter_data(data)
     await state.set_state(Manage.main)
     await state.set_data(data)
-    text = utils.make_main_manage_message(data, data['owner'])
-    reply_markup = keyboards.main_keyboard(
-        data['celery_id'] is not None,
-        False
-    )
+    text = utils.make_main_manage_message(data, data['_owner'])
+    reply_markup = keyboards.main_keyboard(data['celery_id'] is not None)
     await data['_msg'].edit_text(text=text, reply_markup=reply_markup)
 
 
@@ -168,15 +156,167 @@ async def ztp_control(query: types.CallbackQuery,
         await utils.stop_ztp(api_session, data['celery_id'])
         data['celery_id'] = None
         await state.set_data(data)
-    reply_markup = keyboards.main_keyboard(
-        data['celery_id'] is not None,
-        False
-    )
+    reply_markup = keyboards.main_keyboard(data['celery_id'] is not None)
     await data['_msg'].edit_reply_markup(reply_markup=reply_markup)
 
 
 @router.callback_query(callbacks.ScreenData.filter())
+@flags.is_using_api_session
 async def switch_to_screen(query: types.CallbackQuery,
                            state: FSMContext,
-                           callback_data: callbacks.ManageData):
-    pass
+                           callback_data: callbacks.ScreenData,
+                           api_session: aiohttp.ClientSession):
+    data = await state.get_data()
+    await query.answer()
+    if callback_data.screen == 'parameters':
+        text = utils.make_main_manage_message(data, data['_owner'])
+        reply_markup = keyboards.parameters_keyboard(
+            data['_user']['userside_id'] == data['_owner']['userside_id']
+        )
+        data['_msg'] = await data['_msg'].edit_text(text=text,
+                                                    reply_markup=reply_markup)
+        await state.set_data(data)
+    elif callback_data.screen == 'main':
+        ztp_id = data['id']
+        async with api_session.get(f'/entries/{ztp_id}/') as response:
+            entry = await response.json()
+        data = await utils.make_switch_data(data['_msg'], data['_user'],
+                                            data['_is_admin'], entry,
+                                            api_session)
+        text = utils.make_main_manage_message(data, data['_owner'])
+        reply_markup = keyboards.main_keyboard(data['celery_id'] is not None)
+        data['_msg'] = await data['_msg'].edit_text(text=text,
+                                                    reply_markup=reply_markup)
+        await state.set_data(data)
+    elif callback_data.screen == 'configuration':
+        text = utils.make_configuration_message(data)
+        reply_markup = keyboards.configuration_keyboard()
+        data['_msg'] = await data['_msg'].edit_text(text=text,
+                                                    reply_markup=reply_markup)
+        await state.set_data(data)
+
+
+@router.callback_query(callbacks.ManageData.filter(F.cat == 'params'))
+async def edit_parameters(query: types.CallbackQuery,
+                          state: FSMContext,
+                          callback_data: callbacks.ManageData):
+    data = await state.get_data()
+    await query.answer()
+    if callback_data.action == 'transfer_self':
+        data['employee_id'] = data['_user']['userside_id']
+        data['_owner'] = data['_user']
+        text = utils.make_main_manage_message(data, data['_owner'])
+        reply_markup = keyboards.parameters_keyboard(
+            data['_user']['userside_id'] == data['_owner']['userside_id']
+        )
+        data['_msg'] = await data['_msg'].edit_text(text=text,
+                                                    reply_markup=reply_markup)
+    elif callback_data.action == 'transfer':
+        await state.set_state(Manage.waiting_for_employee)
+        text = utils.make_main_manage_message(data, data['_owner'])
+        text += '\nВведи имя или номер сотрудника'
+        data['_msg'] = await data['_msg'].edit_text(text=text,
+                                                    reply_markup=None)
+    elif callback_data.action == 'edit_mac':
+        await state.set_state(Manage.waiting_for_mac)
+        text = utils.make_main_manage_message(data, data['_owner'])
+        text += '\nВведи новый MAC адрес'
+        data['_msg'] = await data['_msg'].edit_text(text=text,
+                                                    reply_markup=None)
+    elif callback_data.action == 'edit_ip':
+        await state.set_state(Manage.waiting_for_ip)
+        text = utils.make_main_manage_message(data, data['_owner'])
+        text += '\nВведи новый IP адрес'
+        data['_msg'] = await data['_msg'].edit_text(text=text,
+                                                    reply_markup=None)
+    elif callback_data.action == 'edit_parent':
+        await state.set_state(Manage.waiting_for_parent)
+        text = utils.make_main_manage_message(data, data['_owner'])
+        text += '\nВведи новый свич и порт подключения в формате "[ip] [port]"'
+        data['_msg'] = await data['_msg'].edit_text(text=text,
+                                                    reply_markup=None)
+    await state.set_data(data)
+
+
+@router.message(state=Manage.waiting_for_employee)
+@flags.is_using_api_session
+async def employee_edit(message: types.Message,
+                        state: FSMContext,
+                        api_session: aiohttp.ClientSession):
+    data = await state.get_data()
+    if data['_is_admin']:
+        await message.delete()
+    criteria = message.text
+    employee = await utils_c.get_employee(criteria, api_session)
+    if employee:
+        data['_owner'] = employee
+        data['employee_id'] = employee['userside_id']
+    await state.set_state(Manage.main)
+    text = utils.make_main_manage_message(data, data['_owner'])
+    reply_markup = keyboards.parameters_keyboard(
+        data['_user']['userside_id'] == data['_owner']['userside_id']
+    )
+    data['_msg'] = await data['_msg'].edit_text(text=text,
+                                                reply_markup=reply_markup)
+    await state.set_data(data)
+
+
+@router.message(state=Manage.waiting_for_ip)
+async def ip_address_edit(message: types.Message,
+                          state: FSMContext):
+    data = await state.get_data()
+    if data['_is_admin']:
+        await message.delete()
+    possible_ip = message.text
+    if utils_c.is_ip_address(possible_ip):
+        data['ip_address'] = possible_ip
+    await state.set_state(Manage.main)
+    text = utils.make_main_manage_message(data, data['_owner'])
+    reply_markup = keyboards.parameters_keyboard(
+        data['_user']['userside_id'] == data['_owner']['userside_id']
+    )
+    data['_msg'] = await data['_msg'].edit_text(text=text,
+                                                reply_markup=reply_markup)
+    await state.set_data(data)
+
+
+@router.message(state=Manage.waiting_for_mac)
+async def mac_address_edit(message: types.Message,
+                           state: FSMContext):
+    data = await state.get_data()
+    if data['_is_admin']:
+        await message.delete()
+    possible_mac = message.text
+    if utils_c.is_mac_address(possible_mac):
+        data['mac_address'] = possible_mac
+    await state.set_state(Manage.main)
+    text = utils.make_main_manage_message(data, data['_owner'])
+    reply_markup = keyboards.parameters_keyboard(
+        data['_user']['userside_id'] == data['_owner']['userside_id']
+    )
+    data['_msg'] = await data['_msg'].edit_text(text=text,
+                                                reply_markup=reply_markup)
+    await state.set_data(data)
+
+
+@router.message(state=Manage.waiting_for_parent)
+async def parent_edit(message: types.Message,
+                      state: FSMContext):
+    data = await state.get_data()
+    if data['_is_admin']:
+        await message.delete()
+    try:
+        parent_switch, parent_port = message.text.split()
+    except ValueError:
+        logging.error('oops')
+    else:
+        data['parent_switch'] = parent_switch
+        data['parent_port'] = parent_port
+    await state.set_state(Manage.main)
+    text = utils.make_main_manage_message(data, data['_owner'])
+    reply_markup = keyboards.parameters_keyboard(
+        data['_user']['userside_id'] == data['_owner']['userside_id']
+    )
+    data['_msg'] = await data['_msg'].edit_text(text=text,
+                                                reply_markup=reply_markup)
+    await state.set_data(data)

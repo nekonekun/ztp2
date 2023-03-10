@@ -1,6 +1,8 @@
+import aiogram.types
 import aiohttp
 import ipaddress
 from typing import Any
+from ...remote_apis.userside import UsersideAPI
 
 
 def make_selecting_switch_message(response: list,
@@ -35,12 +37,40 @@ def make_main_manage_message(entry: dict[str, Any],
                              user: dict[str, Any]):
     text = f'Свич {entry["id"]}\n'
     text += f'Находится у сотрудника {user["name"]}\n'
-    text += f'IP адрес: {entry["ip_address"]}\n'
+    text += f'Модель {entry["_model"]}\n'
     text += f'Серийный номер: {entry["serial_number"]}\n'
+    text += f'IP адрес: {entry["ip_address"]}\n'
     text += f'MAC адрес: {entry["mac_address"]}\n'
     parent_switch = entry['parent_switch'] or '?'
     parent_port = entry['parent_port'] or '?'
     text += f'Подключен от {parent_switch} : {parent_port}\n'
+    return text
+
+
+def make_configuration_message(entry: dict[str, Any]):
+    text = f'Свич {entry["id"]}\n'
+    text += f'IP адрес: {entry["ip_address"]}\n\n'
+    vlan_settings = entry['modified_vlan_settings']
+    port_settings = entry['modified_port_settings']
+    for vlan_id, vlan_name in vlan_settings.items():
+        text += f'{vlan_id}: {vlan_name}\n'
+    text += '\n'
+    for index, settings in port_settings.items():
+        if settings['tagged']:
+            line = f'<b>{index} '
+        else:
+            line = f'{index} '
+        if settings['description']:
+            line += settings['description']
+        line += ';'
+        if settings['untagged']:
+            line += ', '.join([str(vlan)+'u' for vlan in settings['untagged']])
+            line += ';'
+        if settings['tagged']:
+            line += ', '.join([str(vlan)+'t' for vlan in settings['tagged']])
+            line += '</b>'
+        line += '\n'
+        text += line
     return text
 
 
@@ -74,3 +104,24 @@ async def start_ztp(api_session: aiohttp.ClientSession,
 async def stop_ztp(api_session: aiohttp.ClientSession,
                    celery_id: str):
     await api_session.delete(f'/celery/{celery_id}/')
+
+
+async def make_switch_data(msg: aiogram.types.Message,
+                           user: dict[str, Any],
+                           is_admin: bool,
+                           entry: dict[str, Any],
+                           api_session: aiohttp.ClientSession):
+    data = {'_msg': msg,
+            '_user': user,
+            '_is_admin': is_admin}
+    data.update(entry)
+    async with api_session.get(f'/models/{entry["model_id"]}/') as response:
+        content = await response.json()
+    model = content['model']
+    data['_model'] = model
+    async with api_session.get(
+            '/users/',
+            params={'userside_id': entry['employee_id']}) as response:
+        content = await response.json()
+    data['_owner'] = content[0]
+    return data

@@ -62,8 +62,8 @@ async def bot_main(token: str, api_session_factory: ApiSessionFactory,
     bot = Bot(token=token, parse_mode='html')
     dp = Dispatcher(storage=MemoryStorage())
 
-    dp.include_router(manage_router)
     dp.include_router(add_router)
+    dp.include_router(manage_router)
 
     dp.message.middleware(ApiSessionMiddleware(api_session_factory))
     dp.callback_query.middleware(ApiSessionMiddleware(api_session_factory))

@@ -14,3 +14,4 @@ class ManageData(CallbackData, prefix='manage'):
 
 class ScreenData(CallbackData, prefix='manage_goto'):
     screen: str
+    save: bool = False

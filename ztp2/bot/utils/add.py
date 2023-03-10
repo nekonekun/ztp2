@@ -58,16 +58,3 @@ def make_confirmation_text(data: dict):
         text += f'Порт на вышестоящем свиче: {data["port"]}\n'
     text += f'Адрес ящика: {data["node_name"]}'
     return text
-
-
-def is_mac_address(mac: str) -> bool:
-    two_symbols_regex = r'[0-9a-fA-F]{2}([-:.])' \
-                        r'(?:[0-9a-fA-F]{2}\1){4}[0-9a-fA-F]{2}'
-    four_symbols_regex = r'[0-9a-fA-F]{4}([-:.])[0-9a-fA-F]{4}\1[0-9a-fA-F]{4}'
-    no_delimiters_regex = r'[0-9a-fA-F]{12}'
-    if re.match(two_symbols_regex, mac) \
-            or re.match(four_symbols_regex, mac) \
-            or re.match(no_delimiters_regex, mac):
-        return True
-    else:
-        return False

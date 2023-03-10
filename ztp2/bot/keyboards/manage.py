@@ -42,31 +42,84 @@ def selecting_keyboard(is_employee_specified: bool = True,
     return builder.as_markup()
 
 
-def main_keyboard(is_ztp_started: bool,
-                  is_config_prepared):
+def main_keyboard(is_ztp_started: bool):
     builder = InlineKeyboardBuilder()
     if is_ztp_started:
-        row = [
+        builder.row(
             InlineKeyboardButton(
                 text='Остановить ZTP',
-                callback_data=ManageData(cat='ztp', action='stop_ztp').pack())
-        ]
+                callback_data=ManageData(cat='ztp', action='stop_ztp').pack()))
     else:
-        row = [
+        builder.row(
             InlineKeyboardButton(
                 text='Начать ZTP',
-                callback_data=ManageData(cat='ztp', action='start_ztp').pack())
-        ]
-    builder.row(*row)
-    row = [
+                callback_data=ManageData(cat='ztp', action='start_ztp').pack()))
+    builder.row(
         InlineKeyboardButton(
             text='Настройки',
-            callback_data=ScreenData(screen='parameters').pack())
-    ]
-    builder.row(*row)
+            callback_data=ScreenData(screen='parameters').pack()),
+        InlineKeyboardButton(
+            text='Конфиг',
+            callback_data=ScreenData(screen='configuration').pack()))
+    builder.row(
+        InlineKeyboardButton(
+            text='Доделать',
+            callback_data=ManageData(cat='cfg', action='push').pack()))
+    builder.row(
+        InlineKeyboardButton(
+            text='Другой свич',
+            callback_data=ScreenData(screen='select').pack()))
     return builder.as_markup()
 
 
-def parameters_keyboard():
+def parameters_keyboard(is_own_switch: bool = True):
     builder = InlineKeyboardBuilder()
+    if is_own_switch:
+        builder.row(InlineKeyboardButton(
+            text='Отдать другу',
+            callback_data=ManageData(cat='params', action='transfer').pack()))
+    else:
+        builder.row(InlineKeyboardButton(
+            text='Забрать себе',
+            callback_data=ManageData(cat='params',
+                                     action='transfer_self').pack()))
+    builder.row(
+        InlineKeyboardButton(
+            text='Изменить мак',
+            callback_data=ManageData(cat='params', action='edit_mac').pack()),
+        InlineKeyboardButton(
+            text='Изменить IP',
+            callback_data=ManageData(cat='params', action='edit_ip').pack()))
+    builder.row(InlineKeyboardButton(
+        text='Изменить вышестоящий свич',
+        callback_data=ManageData(cat='params', action='edit_parent').pack()))
+    builder.row(
+        InlineKeyboardButton(
+            text='Сохранить и выйти',
+            callback_data=ScreenData(screen='main', save=True).pack()))
+    builder.row(
+        InlineKeyboardButton(
+            text='Выйти без сохранения',
+            callback_data=ScreenData(screen='main').pack()))
+    return builder.as_markup()
 
+
+def configuration_keyboard():
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text='Подписи',
+            callback_data=ManageData(cat='config', action='edit_ports').pack()),
+        InlineKeyboardButton(
+            text='Вланы',
+            callback_data=ManageData(cat='config', action='edit_vlans').pack())
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text='Сохранить и выйти',
+            callback_data=ScreenData(screen='main', save=True).pack()))
+    builder.row(
+        InlineKeyboardButton(
+            text='Выйти без сохранения',
+            callback_data=ScreenData(screen='main').pack()))
+    return builder.as_markup()

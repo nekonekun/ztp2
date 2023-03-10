@@ -9,6 +9,7 @@ from ..states.add import PreMode, Mode
 from ..states.manage import Manage
 from ..utils import add as utils
 from ..utils import manage as utils_m
+from ..utils import common as utils_c
 from ..keyboards import add as keyboards
 from ..keyboards import manage as keyboards_m
 from ..callbacks import add as callbacks
@@ -20,8 +21,7 @@ router = Router()
 logger = logging.getLogger("aiogram.event")
 
 
-@router.message(Command(commands=['add']), state=None)
-@router.message(Command(commands=['add']), state=PreMode)
+@router.message(Command(commands=['add']))
 @flags.authorization
 async def start_add_process(message: types.Message,
                             state: FSMContext,
@@ -109,7 +109,7 @@ async def mac_address_spec(message: types.Message,
         await message.delete()
     data['mac_address'] = None
     mac_address = message.text
-    if not utils.is_mac_address(mac_address):
+    if not utils_c.is_mac_address(mac_address):
         text = utils.make_pre_mode_select_message(data)
         text += f'\nТекст {mac_address} не похож на MAC-адрес. ' \
                 f'Попробуй ещё раз'
@@ -144,19 +144,10 @@ async def employee_spec(message: types.Message,
     if data['_is_admin']:
         await message.delete()
     criteria = message.text
-    if criteria.isdigit():
-        async with api_session.get(
-                '/users/',
-                params={'userside_id': criteria}) as response:
-            new_user = await response.json()
-    else:
-        async with api_session.get(
-                '/users/',
-                params={'name': criteria}) as response:
-            new_user = await response.json()
-    if len(new_user) != 1:
+    new_user = await utils_c.get_employee(criteria, api_session)
+    if not new_user:
         return
-    data['_user'] = new_user[0]
+    data['_user'] = new_user
     await state.set_data(data)
     if data['serial_number'] is None:
         await state.set_state(PreMode.waiting_for_serial)
@@ -304,16 +295,11 @@ async def confirm_check(query: types.CallbackQuery,
     async with api_session.get(f'/models/{entry["model_id"]}/') as response:
         content = await response.json()
     model = content['model']
-    entry['model'] = model
+    entry['_model'] = model
     data.update(entry)
-    data = {k: v
-            for k, v in data.items()
-            if (k[0] != '_') or (k in ['_msg', '_user'])}
+    data = utils_c.filter_data(data)
     text = utils_m.make_main_manage_message(data, data['_user'])
-    reply_markup = keyboards_m.main_keyboard(
-        data['celery_id'] is not None,
-        False
-    )
+    reply_markup = keyboards_m.main_keyboard(data['celery_id'] is not None)
     data['_msg'] = await data['_msg'].edit_text(text=text,
                                                 reply_markup=reply_markup)
     await state.set_state(Manage.main)
