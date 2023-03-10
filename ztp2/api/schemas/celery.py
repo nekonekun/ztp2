@@ -14,8 +14,8 @@ class TaskCreateResponse(BaseModel):
 
 class Task(BaseModel):
     task_id: str
-    name: str
+    name: str | None
     status: str | None
-    args: list[Any]
-    kwargs: dict[Any, Any]
-    info: dict[Any, Any]
+    args: list[Any] | None
+    kwargs: dict[Any, Any] | None
+    info: dict[Any, Any] | None
