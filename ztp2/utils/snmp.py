@@ -87,11 +87,11 @@ async def get_port_vlans(ip_address: str, snmp: DeviceSNMP):
     result = defaultdict(lambda: {'untagged': [], 'tagged': []})
     async with snmp(ip_address=ip_address) as session:
         all_ports = await session.walk('1.3.6.1.2.1.17.7.1.4.3.1.2')
-    all_ports = {elem.oid.split('.')[-1]: bytes_to_portlist(elem.value)
+    all_ports = {int(elem.oid.split('.')[-1]): bytes_to_portlist(elem.value)
                  for elem in all_ports}
     async with snmp(ip_address=ip_address) as session:
         untag_ports = await session.walk('1.3.6.1.2.1.17.7.1.4.3.1.4')
-    untag_ports = {elem.oid.split('.')[-1]: bytes_to_portlist(elem.value)
+    untag_ports = {int(elem.oid.split('.')[-1]): bytes_to_portlist(elem.value)
                    for elem in untag_ports}
     for vlan, port_list in all_ports.items():
         for port in port_list:
