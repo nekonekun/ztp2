@@ -1,7 +1,6 @@
+import aiohttp
 import ipaddress
 from typing import Any
-
-import aiohttp
 
 
 def make_selecting_switch_message(response: list,
@@ -42,8 +41,6 @@ def make_main_manage_message(entry: dict[str, Any],
     parent_switch = entry['parent_switch'] or '?'
     parent_port = entry['parent_port'] or '?'
     text += f'Подключен от {parent_switch} : {parent_port}\n'
-    # autochange = 'включено' if entry['autochange_vlans'] else 'отключено'
-    # text += f'Автоперевешивание влана {autochange}'
     return text
 
 
