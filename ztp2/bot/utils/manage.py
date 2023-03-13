@@ -1,3 +1,6 @@
+import logging
+import re
+from copy import deepcopy
 import aiogram.types
 import aiohttp
 import ipaddress
@@ -33,10 +36,9 @@ def is_ip_address(text: str):
     return True
 
 
-def make_main_manage_message(entry: dict[str, Any],
-                             user: dict[str, Any]):
+def make_main_manage_message(entry: dict[str, Any]):
     text = f'Свич {entry["id"]}\n'
-    text += f'Находится у сотрудника {user["name"]}\n'
+    text += f'Находится у сотрудника {entry["_owner"]["name"]}\n'
     text += f'Модель {entry["_model"]}\n'
     text += f'Серийный номер: {entry["serial_number"]}\n'
     text += f'IP адрес: {entry["ip_address"]}\n'
@@ -125,3 +127,84 @@ async def make_switch_data(msg: aiogram.types.Message,
         content = await response.json()
     data['_owner'] = content[0]
     return data
+
+
+def extract_movements(text: str):
+    port_movement_regex = re.compile(r'(\d+)[^0-9]+(\d+)')
+    lines = text.split('\n')
+    movements = {}
+    for line in lines:
+        match = port_movement_regex.match(line)
+        if not match:
+            return
+        port_from, port_to = match.groups()
+        if port_from in movements:
+            return
+        movements[port_from] = port_to
+    return movements
+
+
+def apply_movements(original_settings: dict, movements: dict):
+    modified_settings = deepcopy(original_settings)
+    for from_, to_ in movements.items():
+        modified_settings[to_] = original_settings[from_]
+        if from_ not in movements.values():
+            modified_settings[from_] = {
+                    'tagged': [],
+                    'untagged': [],
+                    'description': ''
+                }
+    return modified_settings
+
+
+def extract_names(text: str):
+    names_regex = re.compile(r'^(\d+)(?:\s+([\w:_\-,.]+))?$')
+    lines = text.split('\n')
+    names = {}
+    for line in lines:
+        match = names_regex.match(line)
+        if not match:
+            return
+        index, name = match.groups()
+        names[index] = name
+    return names
+
+
+def expand_ranges(ranges: str):
+    ranges_regex = re.compile(r'(?:\d+-\d+|\d+)(?:,(?:\d+-\d+|\d+))*')
+    if not ranges_regex.match(ranges):
+        logging.error('wrong ports format')
+        return
+    result = []
+    for elem in ranges.split(','):
+        if '-' in elem:
+            start, stop = map(int, elem.split('-'))
+            result.extend(range(start, stop + 1))
+        else:
+            result.append(elem)
+    return list(map(str, result))
+
+
+def update_port_vlan_settings(original_settings: dict,
+                              action: str,
+                              vlanids: list,
+                              ports: list):
+    action, mode = action.split('_')
+    vlanids = list(map(int, vlanids))
+    for port in ports:
+        untag = original_settings[port]['untagged']
+        tag = original_settings[port]['tagged']
+        if action == 'delete':
+            untag = [vlan for vlan in untag if vlan not in vlanids]
+            tag = [vlan for vlan in tag if vlan not in vlanids]
+        elif mode == 'untagged':
+            untag.extend(vlanids)
+            untag.sort(key=lambda x: int(x))
+            tag = [vlan for vlan in tag if vlan not in vlanids]
+        else:
+            tag.extend(vlanids)
+            tag.sort(key=lambda x: int(x))
+            untag = [vlan for vlan in untag if vlan not in vlanids]
+        original_settings[port]['untagged'] = sorted(list(set(untag)))
+        original_settings[port]['tagged'] = sorted(list(set(tag)))
+    return original_settings

@@ -109,10 +109,24 @@ def configuration_keyboard():
     builder.row(
         InlineKeyboardButton(
             text='Подписи',
-            callback_data=ManageData(cat='config', action='edit_ports').pack()),
+            callback_data=ManageData(cat='config', action='edit_descrs').pack()),
         InlineKeyboardButton(
             text='Вланы',
             callback_data=ManageData(cat='config', action='edit_vlans').pack())
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text='add tagged',
+            callback_data=ManageData(cat='config', action='edit_ports',
+                                     params='add_tagged').pack()),
+        InlineKeyboardButton(
+            text='add untagged',
+            callback_data=ManageData(cat='config', action='edit_ports',
+                                     params='add_untagged').pack()),
+        InlineKeyboardButton(
+            text='delete',
+            callback_data=ManageData(cat='config', action='edit_ports',
+                                     params='delete_').pack()),
     )
     builder.row(
         InlineKeyboardButton(

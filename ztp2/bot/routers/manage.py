@@ -132,7 +132,7 @@ async def choose_switch(message: types.Message,
     data = utils_c.filter_data(data)
     await state.set_state(Manage.main)
     await state.set_data(data)
-    text = utils.make_main_manage_message(data, data['_owner'])
+    text = utils.make_main_manage_message(data)
     reply_markup = keyboards.main_keyboard(data['celery_id'] is not None)
     await data['_msg'].edit_text(text=text, reply_markup=reply_markup)
 
@@ -169,7 +169,7 @@ async def switch_to_screen(query: types.CallbackQuery,
     data = await state.get_data()
     await query.answer()
     if callback_data.screen == 'parameters':
-        text = utils.make_main_manage_message(data, data['_owner'])
+        text = utils.make_main_manage_message(data)
         reply_markup = keyboards.parameters_keyboard(
             data['_user']['userside_id'] == data['_owner']['userside_id']
         )
@@ -183,7 +183,7 @@ async def switch_to_screen(query: types.CallbackQuery,
         data = await utils.make_switch_data(data['_msg'], data['_user'],
                                             data['_is_admin'], entry,
                                             api_session)
-        text = utils.make_main_manage_message(data, data['_owner'])
+        text = utils.make_main_manage_message(data)
         reply_markup = keyboards.main_keyboard(data['celery_id'] is not None)
         data['_msg'] = await data['_msg'].edit_text(text=text,
                                                     reply_markup=reply_markup)
@@ -193,6 +193,7 @@ async def switch_to_screen(query: types.CallbackQuery,
         reply_markup = keyboards.configuration_keyboard()
         data['_msg'] = await data['_msg'].edit_text(text=text,
                                                     reply_markup=reply_markup)
+        await state.set_state(Manage.waiting_for_movements)
         await state.set_data(data)
 
 
@@ -205,7 +206,7 @@ async def edit_parameters(query: types.CallbackQuery,
     if callback_data.action == 'transfer_self':
         data['employee_id'] = data['_user']['userside_id']
         data['_owner'] = data['_user']
-        text = utils.make_main_manage_message(data, data['_owner'])
+        text = utils.make_main_manage_message(data)
         reply_markup = keyboards.parameters_keyboard(
             data['_user']['userside_id'] == data['_owner']['userside_id']
         )
@@ -213,25 +214,25 @@ async def edit_parameters(query: types.CallbackQuery,
                                                     reply_markup=reply_markup)
     elif callback_data.action == 'transfer':
         await state.set_state(Manage.waiting_for_employee)
-        text = utils.make_main_manage_message(data, data['_owner'])
+        text = utils.make_main_manage_message(data)
         text += '\nВведи имя или номер сотрудника'
         data['_msg'] = await data['_msg'].edit_text(text=text,
                                                     reply_markup=None)
     elif callback_data.action == 'edit_mac':
         await state.set_state(Manage.waiting_for_mac)
-        text = utils.make_main_manage_message(data, data['_owner'])
+        text = utils.make_main_manage_message(data)
         text += '\nВведи новый MAC адрес'
         data['_msg'] = await data['_msg'].edit_text(text=text,
                                                     reply_markup=None)
     elif callback_data.action == 'edit_ip':
         await state.set_state(Manage.waiting_for_ip)
-        text = utils.make_main_manage_message(data, data['_owner'])
+        text = utils.make_main_manage_message(data)
         text += '\nВведи новый IP адрес'
         data['_msg'] = await data['_msg'].edit_text(text=text,
                                                     reply_markup=None)
     elif callback_data.action == 'edit_parent':
         await state.set_state(Manage.waiting_for_parent)
-        text = utils.make_main_manage_message(data, data['_owner'])
+        text = utils.make_main_manage_message(data)
         text += '\nВведи новый свич и порт подключения в формате "[ip] [port]"'
         data['_msg'] = await data['_msg'].edit_text(text=text,
                                                     reply_markup=None)
@@ -244,15 +245,15 @@ async def employee_edit(message: types.Message,
                         state: FSMContext,
                         api_session: aiohttp.ClientSession):
     data = await state.get_data()
-    if data['_is_admin']:
-        await message.delete()
     criteria = message.text
     employee = await utils_c.get_employee(criteria, api_session)
     if employee:
+        if data['_is_admin']:
+            await message.delete()
         data['_owner'] = employee
         data['employee_id'] = employee['userside_id']
     await state.set_state(Manage.main)
-    text = utils.make_main_manage_message(data, data['_owner'])
+    text = utils.make_main_manage_message(data)
     reply_markup = keyboards.parameters_keyboard(
         data['_user']['userside_id'] == data['_owner']['userside_id']
     )
@@ -265,13 +266,13 @@ async def employee_edit(message: types.Message,
 async def ip_address_edit(message: types.Message,
                           state: FSMContext):
     data = await state.get_data()
-    if data['_is_admin']:
-        await message.delete()
     possible_ip = message.text
     if utils_c.is_ip_address(possible_ip):
+        if data['_is_admin']:
+            await message.delete()
         data['ip_address'] = possible_ip
     await state.set_state(Manage.main)
-    text = utils.make_main_manage_message(data, data['_owner'])
+    text = utils.make_main_manage_message(data)
     reply_markup = keyboards.parameters_keyboard(
         data['_user']['userside_id'] == data['_owner']['userside_id']
     )
@@ -284,13 +285,13 @@ async def ip_address_edit(message: types.Message,
 async def mac_address_edit(message: types.Message,
                            state: FSMContext):
     data = await state.get_data()
-    if data['_is_admin']:
-        await message.delete()
     possible_mac = message.text
     if utils_c.is_mac_address(possible_mac):
+        if data['_is_admin']:
+            await message.delete()
         data['mac_address'] = possible_mac
     await state.set_state(Manage.main)
-    text = utils.make_main_manage_message(data, data['_owner'])
+    text = utils.make_main_manage_message(data)
     reply_markup = keyboards.parameters_keyboard(
         data['_user']['userside_id'] == data['_owner']['userside_id']
     )
@@ -303,20 +304,153 @@ async def mac_address_edit(message: types.Message,
 async def parent_edit(message: types.Message,
                       state: FSMContext):
     data = await state.get_data()
-    if data['_is_admin']:
-        await message.delete()
     try:
         parent_switch, parent_port = message.text.split()
     except ValueError:
         logging.error('oops')
     else:
+        if data['_is_admin']:
+            await message.delete()
         data['parent_switch'] = parent_switch
         data['parent_port'] = parent_port
     await state.set_state(Manage.main)
-    text = utils.make_main_manage_message(data, data['_owner'])
+    text = utils.make_main_manage_message(data)
     reply_markup = keyboards.parameters_keyboard(
         data['_user']['userside_id'] == data['_owner']['userside_id']
     )
     data['_msg'] = await data['_msg'].edit_text(text=text,
                                                 reply_markup=reply_markup)
     await state.set_data(data)
+
+
+@router.message(state=Manage.waiting_for_movements)
+async def parent_edit(message: types.Message,
+                      state: FSMContext):
+
+    new_movements = utils.extract_movements(message.text)
+    if not new_movements:
+        return
+    data = await state.get_data()
+    if data['_is_admin']:
+        await message.delete()
+    movements: dict = data['port_movements'].copy()
+    movements.update(new_movements)
+    movements = {k: v
+                 for k, v
+                 in movements.items()
+                 if k != v}
+    new_port_settings = utils.apply_movements(data['original_port_settings'],
+                                              movements)
+    data['port_movements'] = movements
+    data['modified_port_settings'] = new_port_settings
+    await state.set_data(data)
+    text = utils.make_configuration_message(data)
+    reply_markup = keyboards.configuration_keyboard()
+    data['_msg'] = await data['_msg'].edit_text(text=text,
+                                                reply_markup=reply_markup)
+
+
+@router.callback_query(callbacks.ManageData.filter(F.cat == 'config'))
+async def edit_configuration(query: types.CallbackQuery,
+                             state: FSMContext,
+                             callback_data: callbacks.ManageData):
+    await query.answer()
+    if callback_data.action == 'edit_descrs':
+        text = query.message.text
+        text += '\n\nУкажи подписи в формате "{port} [{description}]"\n' \
+                'Если указать только номер порта -- подпись будет стёрта\n' \
+                'Можно указать сразу несколько, каждый с новой строки'
+        await state.set_state(Manage.waiting_for_descriptions)
+    elif callback_data.action == 'edit_vlans':
+        text = query.message.text
+        text += '\n\nУкажи вланы в формате "{vid} [{name}]"\n' \
+                'Если указать только номер влана -- влан будет удалён\n' \
+                'Можно указать сразу несколько, каждый с новой строки'
+        await state.set_state(Manage.waiting_for_vlans)
+    elif callback_data.action == 'edit_ports':
+        text = query.message.text
+        text += '\n\nУкажи вланы списком в dlink-формате'
+        data = await state.get_data()
+        data['_action'] = callback_data.params
+        await state.set_data(data)
+        await state.set_state(Manage.waiting_for_vlanids)
+    await query.message.edit_text(text=text)  # noqa
+
+
+@router.message(state=Manage.waiting_for_descriptions)
+@router.message(state=Manage.waiting_for_vlans)
+async def config_edit(message: types.Message,
+                      state: FSMContext):
+    names = utils.extract_names(message.text)
+    data = await state.get_data()
+    if not names:
+        text = utils.make_configuration_message(data)
+        reply_markup = keyboards.configuration_keyboard()
+        data['_msg'] = await data['_msg'].edit_text(text=text,
+                                                    reply_markup=reply_markup)
+        await state.set_data(data)
+        await state.set_state(Manage.waiting_for_movements)
+        return
+    current_state = await state.get_state()
+    if current_state == Manage.waiting_for_descriptions:
+        for index, description in names.items():
+            data['modified_port_settings'][index]['description'] = description
+    elif current_state == Manage.waiting_for_vlans:
+        for vlan_id, name in names.items():
+            if not name:
+                if data['modified_vlan_settings'].get(vlan_id):
+                    data['modified_vlan_settings'].pop(vlan_id)
+            else:
+                data['modified_vlan_settings'][vlan_id] = name
+    else:
+        return
+    text = utils.make_configuration_message(data)
+    reply_markup = keyboards.configuration_keyboard()
+    data['_msg'] = await data['_msg'].edit_text(text=text,
+                                                reply_markup=reply_markup)
+    await state.set_data(data)
+    await state.set_state(Manage.waiting_for_movements)
+
+
+@router.message(state=Manage.waiting_for_vlanids)
+async def port_vlan_edit_start(message: types.Message,
+                               state: FSMContext):
+    data = await state.get_data()
+    vlan_text = message.text
+    vlanids = utils.expand_ranges(vlan_text)
+    if not vlanids:
+        return
+    if data['_is_admin']:
+        await message.delete()
+    data['_vlanids'] = vlanids
+    await state.set_data(data)
+    await state.set_state(Manage.waiting_for_ports)
+    text = data['_msg'].text
+    text += f'\n\nВыбраны вланы {vlan_text}\n' \
+            f'Укажи порты списком в dlink-формате'
+    await data['_msg'].edit_text(text=text)
+
+
+@router.message(state=Manage.waiting_for_ports)
+async def port_vlan_edit_finish(message: types.Message,
+                                state: FSMContext):
+    ports = utils.expand_ranges(message.text)
+    if not ports:
+        return
+    data = await state.get_data()
+    if data['_is_admin']:
+        await message.delete()
+    port_settings = data['modified_port_settings']
+    new_port_settings = utils.update_port_vlan_settings(port_settings,
+                                                        data['_action'],
+                                                        data['_vlanids'],
+                                                        ports)
+    data['modified_port_settings'] = new_port_settings
+    data.pop('_action')
+    data.pop('_vlanids')
+    text = utils.make_configuration_message(data)
+    reply_markup = keyboards.configuration_keyboard()
+    data['_msg'] = await data['_msg'].edit_text(text=text,
+                                                reply_markup=reply_markup)
+    await state.set_data(data)
+    await state.set_state(Manage.waiting_for_movements)

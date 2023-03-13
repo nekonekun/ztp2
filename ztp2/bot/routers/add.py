@@ -297,8 +297,9 @@ async def confirm_check(query: types.CallbackQuery,
     model = content['model']
     entry['_model'] = model
     data.update(entry)
+    data['_owner'] = data['_user']
     data = utils_c.filter_data(data)
-    text = utils_m.make_main_manage_message(data, data['_user'])
+    text = utils_m.make_main_manage_message(data)
     reply_markup = keyboards_m.main_keyboard(data['celery_id'] is not None)
     data['_msg'] = await data['_msg'].edit_text(text=text,
                                                 reply_markup=reply_markup)

@@ -10,3 +10,6 @@ class Manage(StatesGroup):
     waiting_for_parent = State()
     waiting_for_descriptions = State()
     waiting_for_vlans = State()
+    waiting_for_movements = State()
+    waiting_for_vlanids = State()
+    waiting_for_ports = State()
