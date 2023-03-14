@@ -15,8 +15,9 @@ from ...remote_apis.ftp import ContextedFTP
 from ...remote_apis.server import ServerTerminalFactory
 from ...utils.ftp import pattern_in_file_content
 from ...utils.netbox import get_prefix_info
-from ...utils.ztp import CiscoInterface, DlinkInterface, \
-    office_dhcp_config_lines
+from ...utils.ztp import CiscoInterface, DlinkInterface
+#    office_dhcp_config_lines
+from ...utils.server import create_entry
 from ...utils.sort_of_ping import check_port
 
 
@@ -247,11 +248,6 @@ def create_dhcp_office_entry(self, entry_id: int, mac_address: str,
     )
     mac_address = [mac_address[i:i+2] for i in range(0, len(mac_address), 2)]
     mac_address = ':'.join(mac_address)
-    lines = office_dhcp_config_lines(entry_id, mac_address, ftp_host,
-                                     config_filename, firmware_filename)
-    lines = list(map(lambda x: x.replace('"', '\\"'), lines))
-    dhcp_file = self.remote_filename
     with self.server_ssh_factory() as session:
-        for line in lines:
-            session.send_command(f'echo "{line}" >> {dhcp_file}')
-        session.send_command('sudo /etc/init.d/isc-dhcp-server restart')
+        create_entry(entry_id, mac_address, ftp_host, config_filename,
+                     firmware_filename, self.remote_filename, session)

@@ -215,36 +215,3 @@ async def generate_initial_config(entry: Entry, model: Model,
     params = await gather_initial_configuration_parameters(entry, model, netbox)
     config = make_config_from_template(template, **params)
     await upload_file(config_filename, config, ftp)
-
-
-def generate_option_125(firmware_filename: str):
-    dlink_id = '00:00:00:AB'
-    suboption_length = hex(1 + 1 + len(firmware_filename))[2:].upper().zfill(2)
-    suboption_code = '01'
-    filename_length = hex(len(firmware_filename))[2:].upper().zfill(2)
-    hex_filename = ':'.join(
-        [hex(ord(letter))[2:].upper().zfill(2)
-         for letter in firmware_filename])
-    answer = dlink_id
-    answer += ':'
-    answer += suboption_length
-    answer += ':'
-    answer += suboption_code
-    answer += ':'
-    answer += filename_length
-    answer += ':'
-    answer += hex_filename
-    return answer
-
-
-def office_dhcp_config_lines(entry_id: int, mac_address: str, ftp_host: str,
-                             config_filename: str, firmware_filename: str):
-    return [
-        'group {',
-        f'option tftp-server-name "{ftp_host}";',
-        f'option bootfile-name "{config_filename}";',
-        f'option option125 {generate_option_125(firmware_filename)};',
-        f'option option150 {ftp_host};',
-        f'host entry_{entry_id} {{ hardware ethernet {mac_address}; }}',
-        '}'
-    ]

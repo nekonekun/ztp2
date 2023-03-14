@@ -26,3 +26,4 @@ celery[redis]==5.2.7
 aiogram==3.0.0b4
 aioftp==0.21.4
 Jinja2==3.1.2
+netmiko==4.1.2
