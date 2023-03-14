@@ -24,13 +24,13 @@ def generate_option_125(firmware_filename: str):
 def create_entry(ztp_id: int, mac_address: str, ftp_host: str,
                  config_filename: str, firmware_filename: str,
                  dhcp_config_filepath: str, session: LinuxSSH):
-    possible_mac_duplicate = session.send_command(
-        f"cat {dhcp_config_filepath} | "
-        f"grep -Fn 'hardware ethernet {mac_address}' | "
-        f"cut --delimiter=':' --fields=1")
+    cmd = f"cat {dhcp_config_filepath} | " \
+          f"grep -Fn 'hardware ethernet {mac_address}' | " \
+          f"cut --delimiter=':' --fields=1"
+    possible_mac_duplicate = session.send_command(cmd)
     if possible_mac_duplicate:
         line_number = int(possible_mac_duplicate)
-        cmd = f"sed -i '{line_number - 5},{line_number + 1}d' " \
+        cmd = f"sudo sed -i '{line_number - 5},{line_number + 1}d' " \
               f"{dhcp_config_filepath}"
         session.send_command(cmd)
     lines = [
@@ -43,7 +43,7 @@ def create_entry(ztp_id: int, mac_address: str, ftp_host: str,
         '}'
     ]
     for line in lines:
-        session.send_command(f'echo "{line}" >> {dhcp_config_filepath}')
+        session.send_command(f'echo \'{line}\' >> {dhcp_config_filepath}')
     session.send_command('sudo /etc/init.d/isc-dhcp-server restart')
 
 
@@ -57,7 +57,7 @@ def change_mac_address(ztp_id: int,
         f"cut --delimiter=':' --fields=1")
     if not line_number:
         return
-    cmd = f"sed -i -E " \
+    cmd = f"sudo sed -i -E " \
         f"'{line_number}s/(hardware ethernet ).+?(;)/\\1{new_mac}\\2/' " \
         f"{dhcp_config_filepath}"
     session.send_command(cmd)
@@ -74,7 +74,7 @@ def change_ip_address(ztp_id: int,
     if not line_number:
         return
     bootfile_line = int(line_number) - 3
-    cmd = f"sed -i -E " \
+    cmd = f"sudo sed -i -E " \
           f"'{bootfile_line}s/(initial\\/).+?(\\.cfg)/\\1{new_ip}\\2/' " \
           f"{dhcp_config_filepath}"
     session.send_command(cmd)
@@ -90,5 +90,6 @@ def delete_entry(ztp_id: int,
     if not line_number:
         return
     line_number = int(line_number)
-    cmd = f"sed -i '{line_number-5},{line_number+1}d' {dhcp_config_filepath}"
+    cmd = f"sudo sed -i '{line_number-5},{line_number+1}d' " \
+          f"{dhcp_config_filepath}"
     session.send_command(cmd)
