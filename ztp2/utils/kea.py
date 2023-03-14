@@ -7,7 +7,7 @@ So we have to prepare values to match KEA format by ourselves
 import ipaddress
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy import select, and_, delete
+from sqlalchemy import select, and_, delete, update
 
 from ..db.models.kea_dhcp import Host, DHCPOption
 
@@ -157,4 +157,53 @@ async def create_host_and_options(db: AsyncSession,
         stmt = insert(DHCPOption)
         stmt = stmt.values(**option_params)
         await db.execute(stmt)
+    await db.commit()
+
+
+async def change_ip_address(db: AsyncSession,
+                            mac_address: str,
+                            ip_address: str,
+                            cfg_filename: str):
+    dhcp_identifier = hexstring_to_bytea(mac_address)
+    stmt = select(Host).where(Host.dhcp_identifier == dhcp_identifier)
+    response = await db.execute(stmt)
+    host = response.scalars().first()
+    if not host:
+        return
+    host_id = host['host_id']
+
+    # Update hosts table with new ip_address
+    ip_address = int(ipaddress.IPv4Address(ip_address))
+    stmt = update(Host).where(Host.host_id == host_id)
+    stmt = stmt.values(ipv4_address=ip_address)
+    await db.execute(stmt)
+
+    # Update dhcp4_options table with new config filename
+    option67 = bytes(cfg_filename, 'utf-8')
+    stmt = update(DHCPOption).where(and_(
+        DHCPOption.host_id == host_id,
+        DHCPOption.code == 67
+    ))
+    stmt = stmt.values(value=option67)
+    await db.execute(stmt)
+
+    await db.commit()
+
+
+async def change_mac_address(db: AsyncSession,
+                             mac_address: str,
+                             new_mac_address: str):
+    dhcp_identifier = hexstring_to_bytea(mac_address)
+    stmt = select(Host).where(Host.dhcp_identifier == dhcp_identifier)
+    response = await db.execute(stmt)
+    host = response.scalars().first()
+    if not host:
+        return
+    host_id = host['host_id']
+
+    # Update hosts table with new mac_address
+    new_dhcp_identifier = hexstring_to_bytea(new_mac_address)
+    stmt = update(Host).where(Host.host_id == host_id)
+    stmt = stmt.values(dhcp_identifier=new_dhcp_identifier)
+    await db.execute(stmt)
     await db.commit()
