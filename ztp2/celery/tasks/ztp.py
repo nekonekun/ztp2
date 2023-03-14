@@ -12,12 +12,10 @@ from ...db.models.ztp import Entry
 from ...remote_apis.snmp import DeviceSNMP
 from ...remote_apis.terminal import DeviceTerminal
 from ...remote_apis.ftp import ContextedFTP
-from ...remote_apis.server import ServerTerminalFactory
 from ...utils.ftp import pattern_in_file_content
 from ...utils.netbox import get_prefix_info
 from ...utils.ztp import CiscoInterface, DlinkInterface
-#    office_dhcp_config_lines
-from ...utils.server import create_entry
+from ...utils.server import create_entry, change_ip_address, change_mac_address
 from ...utils.sort_of_ping import check_port
 
 
@@ -251,3 +249,16 @@ def create_dhcp_office_entry(self, entry_id: int, mac_address: str,
     with self.server_ssh_factory() as session:
         create_entry(entry_id, mac_address, ftp_host, config_filename,
                      firmware_filename, self.remote_filename, session)
+
+
+@current_app.task(base=RemoteFileModifyTask,
+                  name='ztp2_office_dhcp_edit',
+                  bind=True)
+def edit_dhcp_office_entry(self, entry_id: int, field: str, value: str):
+    if field not in ['ip_address', 'mac_address']:
+        return
+    with self.server_ssh_factory() as session:
+        if field == 'ip_address':
+            change_ip_address(entry_id, value, self.remote_filename, session)
+        elif field == 'mac_address':
+            change_mac_address(entry_id, value, self.remote_filename, session)
