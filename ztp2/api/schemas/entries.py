@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, Extra
 from typing import Literal, Any, Optional
 import ipaddress
 import datetime
@@ -42,6 +42,7 @@ class EntryPatchRequest(BaseModel):
 
     class Config:
         orm_mode = True
+        extra = Extra.allow
 
 
 class Entry(BaseModel):

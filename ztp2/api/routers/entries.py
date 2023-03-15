@@ -196,11 +196,18 @@ async def entries_create(req: EntryCreateRequest,
 
     initial_template_filepath = f'{ftp_settings.templates_initial_path}' \
                                 f'{model_obj.default_initial_config}'
+    full_config_filepath = f'{ftp_settings.configs_full_path}' \
+                           f'{answer.ip_address.exploded}.cfg'
+    full_template_filepath = f'{ftp_settings.templates_full_path}' \
+                             f'{model_obj.default_full_config}'
     async with ftp as ftp_instance:
         await utils.ztp.generate_initial_config(
             answer, model_obj, ftp_settings.tftp_folder,
             initial_template_filepath, initial_config_filepath, netbox,
             ftp_instance)
+        await utils.ztp.generate_full_config(
+            answer, model_obj, ftp_settings.tftp_folder,
+            full_template_filepath, full_config_filepath, netbox, ftp_instance)
 
     celery_task_kwargs = {
         'entry_id': answer.id,
@@ -240,9 +247,97 @@ async def entries_read(entry_id: int, db=Depends(ztp_db_session_stub)):
 
 @entries_router.patch('/{entry_id}/', response_model=Entry)
 async def entries_partial_update(entry_id: int, req: EntryPatchRequest,
-                                 db=Depends(ztp_db_session_stub)):
-    entry = await crud.entry.read(db=db, id=entry_id)
-    answer = await crud.entry.update(db=db, db_obj=entry, obj_in=req)
+                                 db=Depends(ztp_db_session_stub),
+                                 userside_api=Depends(userside_api_stub),
+                                 kea=Depends(kea_db_session_stub),
+                                 celery=Depends(celery_stub),
+                                 ftp_settings=Depends(ftp_settings_stub),
+                                 ftp=Depends(contexted_ftp_stub),
+                                 netbox=Depends(netbox_session_stub)):
+    entry: Entry = await crud.entry.read(db=db, id=entry_id)
+    update_obj = EntryPatchRequest()
+    # Employee changed check
+    if entry.employee_id != req.employee_id:
+        # Update ZTP DB entry
+        update_obj.employee_id = req.employee_id
+        # If ZTP is not finished -- move switch to new employee
+        if not entry.finished_at:
+            async with userside_api:
+                inv_item = await utils.userside.get_inventory_item(
+                    entry.serial_number, userside_api)
+                await utils.userside.transfer_inventory_to_employee(
+                    inv_item['id'], req.employee_id, userside_api)
+    # IP address changed check
+    if entry.ip_address != req.ip_address:
+        # Update ZTP DB entry
+        update_obj.ip_address = req.ip_address
+        # Update KEA DHCP entry
+        old_clean_mac = ''.join(letter
+                                for letter in entry.mac_address.lower()
+                                if letter in '0123456789abcdef')
+        initial_config_filepath = f'{ftp_settings.configs_initial_path}' \
+                                  f'{req.ip_address.exploded}.cfg'
+        await utils.kea_change_ip_address(kea,
+                                          old_clean_mac,
+                                          req.ip_address.exploded,
+                                          initial_config_filepath)
+        # Update office DHCP entry
+        celery_task_kwargs = {
+            'entry_id': entry_id,
+            'field': 'ip_address',
+            'value': req.ip_address.exploded,
+        }
+        celery.send_task('ztp2_office_dhcp_edit', kwargs=celery_task_kwargs)
+        # Generate new initial config
+        model_obj = await crud.model.read(db, entry.model_id)
+        initial_template_filepath = f'{ftp_settings.templates_initial_path}' \
+                                    f'{model_obj.default_initial_config}'
+        async with ftp as ftp_instance:
+            await utils.ztp.generate_initial_config(
+                entry, model_obj, ftp_settings.tftp_folder,
+                initial_template_filepath, initial_config_filepath, netbox,
+                ftp_instance)
+    # MAC address changed check
+    new_clean_mac = ''.join(letter
+                            for letter in req.mac_address.lower()
+                            if letter in '0123456789abcdef')
+    old_clean_mac = ''.join(letter
+                            for letter in entry.mac_address.lower()
+                            if letter in '0123456789abcdef')
+    if old_clean_mac != new_clean_mac:
+        # Update ZTP DB entry
+        update_obj.mac_address = req.mac_address
+        # Update KEA DHCP entry
+        await utils.kea.kea_change_mac_address(kea,
+                                               old_clean_mac,
+                                               new_clean_mac)
+        # Update Office DHCP entry
+        celery_task_kwargs = {
+            'entry_id': entry_id,
+            'field': 'mac_address',
+            'value': new_clean_mac,
+        }
+        celery.send_task('ztp2_office_dhcp_edit', kwargs=celery_task_kwargs)
+    # Port settings changed check
+    ports_changed = entry.modified_port_settings != req.modified_port_settings
+    vlans_changed = entry.modified_vlan_settings != req.modified_vlan_settings
+    moves_changed = entry.port_movements != req.port_movements
+    if ports_changed or vlans_changed or moves_changed:
+        update_obj.modified_port_settings = req.modified_port_settings
+        update_obj.modified_vlan_settings = req.modified_vlan_settings
+        update_obj.port_movements = req.port_movements
+        model_obj = await crud.model.read(db, entry.model_id)
+        full_config_filepath = f'{ftp_settings.configs_full_path}' \
+                               f'{entry.ip_address.exploded}.cfg'
+        full_template_filepath = f'{ftp_settings.templates_full_path}' \
+                                 f'{model_obj.default_full_config}'
+        async with ftp as ftp_instance:
+            await utils.ztp.generate_full_config(
+                entry, model_obj, ftp_settings.tftp_folder,
+                full_template_filepath, full_config_filepath, netbox,
+                ftp_instance)
+
+    answer = await crud.entry.update(db=db, db_obj=entry, obj_in=update_obj)
     return answer
 
 
