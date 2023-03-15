@@ -241,11 +241,6 @@ async def _ztp(ztp_id: int,
 def create_dhcp_office_entry(self, entry_id: int, mac_address: str,
                              ftp_host: str, config_filename: str,
                              firmware_filename: str):
-    mac_address = ''.join(
-        filter(lambda x: x in '0123456789abcdef', mac_address.lower())
-    )
-    mac_address = [mac_address[i:i+2] for i in range(0, len(mac_address), 2)]
-    mac_address = ':'.join(mac_address)
     with self.server_ssh_factory() as session:
         create_entry(entry_id, mac_address, ftp_host, config_filename,
                      firmware_filename, self.remote_filename, session)

@@ -1,6 +1,14 @@
 from netmiko.linux import LinuxSSH
 
 
+def isc_dhcp_format_mac(mac_address: str):
+    mac_address = ''.join(filter(lambda x: x in '0123456789abcdef',
+                                 mac_address.lower()))
+    mac_address = [mac_address[i:i + 2] for i in range(0, len(mac_address), 2)]
+    mac_address = ':'.join(mac_address)
+    return mac_address
+
+
 def generate_option_125(firmware_filename: str):
     dlink_id = '00:00:00:AB'
     suboption_length = hex(1 + 1 + len(firmware_filename))[2:].upper().zfill(2)
@@ -24,6 +32,7 @@ def generate_option_125(firmware_filename: str):
 def create_entry(ztp_id: int, mac_address: str, ftp_host: str,
                  config_filename: str, firmware_filename: str,
                  dhcp_config_filepath: str, session: LinuxSSH):
+    mac_address = isc_dhcp_format_mac(mac_address)
     cmd = f"cat {dhcp_config_filepath} | " \
           f"grep -Fn 'hardware ethernet {mac_address}' | " \
           f"cut --delimiter=':' --fields=1"
@@ -51,6 +60,7 @@ def change_mac_address(ztp_id: int,
                        new_mac: str,
                        dhcp_config_filepath: str,
                        session: LinuxSSH):
+    new_mac = isc_dhcp_format_mac(new_mac)
     line_number = session.send_command(
         f"cat {dhcp_config_filepath} | "
         f"grep -Fn 'entry_{ztp_id}' | "
@@ -61,6 +71,7 @@ def change_mac_address(ztp_id: int,
         f"'{line_number}s/(hardware ethernet ).+?(;)/\\1{new_mac}\\2/' " \
         f"{dhcp_config_filepath}"
     session.send_command(cmd)
+    session.send_command('sudo /etc/init.d/isc-dhcp-server restart')
 
 
 def change_ip_address(ztp_id: int,
@@ -78,6 +89,7 @@ def change_ip_address(ztp_id: int,
           f"'{bootfile_line}s/(initial\\/).+?(\\.cfg)/\\1{new_ip}\\2/' " \
           f"{dhcp_config_filepath}"
     session.send_command(cmd)
+    session.send_command('sudo /etc/init.d/isc-dhcp-server restart')
 
 
 def delete_entry(ztp_id: int,
@@ -93,3 +105,4 @@ def delete_entry(ztp_id: int,
     cmd = f"sudo sed -i '{line_number-5},{line_number+1}d' " \
           f"{dhcp_config_filepath}"
     session.send_command(cmd)
+    session.send_command('sudo /etc/init.d/isc-dhcp-server restart')
