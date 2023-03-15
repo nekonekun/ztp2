@@ -215,3 +215,29 @@ async def generate_initial_config(entry: Entry, model: Model,
     params = await gather_initial_configuration_parameters(entry, model, netbox)
     config = make_config_from_template(template, **params)
     await upload_file(config_filename, config, ftp)
+
+
+async def gather_full_configuration_parameters(
+        entry: Entry, model: Model, netbox: aiohttp.ClientSession):
+    vlan_id, vlan_name = await get_vlan(entry.ip_address, netbox)
+    return {
+        'portcount': model.portcount,
+        'management_vlan_tag': vlan_id,
+        'port_settings': entry.modified_port_settings,
+        'vlan_settings': entry.modified_vlan_settings,
+        'ip_address': entry.ip_address.exploded
+    }
+
+
+async def generate_full_config(entry: Entry, model: Model,
+                               base_folder: str,
+                               template_filename: str,
+                               config_filename: str,
+                               netbox: aiohttp.ClientSession,
+                               ftp: aioftp.Client):
+    config_filename = base_folder + config_filename
+    template_filename = base_folder + template_filename
+    template = await get_file_content(template_filename, ftp)
+    params = await gather_full_configuration_parameters(entry, model, netbox)
+    config = make_config_from_template(template, **params)
+    await upload_file(config_filename, config, ftp)
