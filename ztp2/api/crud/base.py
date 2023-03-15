@@ -3,7 +3,7 @@ from typing import Any, Generic, Type, TypeVar
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, insert, update, delete
 
 from ztp2.db.models.base import ZTPBase
 
@@ -39,10 +39,12 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             obj_in: CreateSchemaType
     ) -> ModelType:
         obj_in_data = jsonable_encoder(obj_in)
-        db_obj = self._schema(**obj_in_data)
-        db.add(db_obj)
+        stmt = insert(self._schema)
+        stmt = stmt.values(**obj_in_data)
+        stmt = stmt.returning(self._schema)
+        result = await db.execute(stmt)
         await db.commit()
-        return db_obj
+        return result.scalars().first()
 
     async def update(self, db: AsyncSession, *,
                      db_obj: ModelType,
@@ -53,18 +55,18 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             update_data = obj_in
         else:
             update_data = obj_in.dict(exclude_unset=True)
-        for field in obj_data:
-            if field in update_data:
-                setattr(db_obj, field, update_data[field])
-        db.add(db_obj)
+        stmt = update(self._schema)
+        stmt = stmt.where(self._schema.id == db_obj.id)
+        stmt = stmt.values(**update_data)
+        stmt = stmt.returning(self._schema)
+        result = await db.execute(stmt)
         await db.commit()
-        await db.refresh(db_obj)
-        return db_obj
+        return result.scalars().first()
 
     async def delete(self, db: AsyncSession, *, id: int) -> ModelType:
-        statement = select(self._schema).filter_by(id=id)
-        response = await db.execute(statement)
-        target_obj = response.scalars().first()
-        await db.delete(target_obj)
+        stmt = delete(self._schema)
+        stmt = stmt.where(self._schema.id == id)
+        stmt = stmt.returning(self._schema)
+        result = await db.execute(stmt)
         await db.commit()
-        return target_obj
+        return result.scalars().first()

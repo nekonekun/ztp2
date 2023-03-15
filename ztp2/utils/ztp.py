@@ -190,12 +190,13 @@ def make_config_from_template(template: str, **kwargs):
 
 async def gather_initial_configuration_parameters(
         entry: Entry, model: Model, netbox: aiohttp.ClientSession):
-    vlan_id, vlan_name = await get_vlan(entry.ip_address, netbox)
-    default_gateway = await get_default_gateway(entry.ip_address, netbox)
+    vlan_id, vlan_name = await get_vlan(entry.ip_address.exploded, netbox)
+    default_gateway = await get_default_gateway(entry.ip_address.exploded,
+                                                netbox)
     return {
         'configuration_prefix': model.configuration_prefix,
         'portcount': model.portcount,
-        'ip_address': entry.ip_address,
+        'ip_address': entry.ip_address.exploded,
         'management_vlan_id': vlan_id,
         'management_vlan_name': vlan_name,
         'subnet_mask': default_gateway.netmask.exploded,
@@ -219,10 +220,10 @@ async def generate_initial_config(entry: Entry, model: Model,
 
 async def gather_full_configuration_parameters(
         entry: Entry, model: Model, netbox: aiohttp.ClientSession):
-    vlan_id, vlan_name = await get_vlan(entry.ip_address, netbox)
+    vlan_id, vlan_name = await get_vlan(entry.ip_address.exploded, netbox)
     return {
         'portcount': model.portcount,
-        'management_vlan_tag': vlan_id,
+        'management_vlan_tag': int(vlan_id),
         'port_settings': entry.modified_port_settings,
         'vlan_settings': entry.modified_vlan_settings,
         'ip_address': entry.ip_address.exploded

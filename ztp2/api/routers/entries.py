@@ -181,16 +181,14 @@ async def entries_create(req: EntryCreateRequest,
     answer = await crud.entry.create(db, obj_in=new_object)
 
     default_gateway = await utils.netbox.get_default_gateway(
-        answer.ip_address, netbox)
+        answer.ip_address.exploded, netbox)
 
     initial_config_filepath = f'{ftp_settings.configs_initial_path}' \
-                              f'{answer.ip_address}.cfg'
+                              f'{answer.ip_address.exploded}.cfg'
     firmware_filepath = ftp_settings.firmwares_path + model_obj.firmware
 
-    ip_obj = ipaddress.ip_address(answer.ip_address)
-
     await utils.kea.create_host_and_options(
-        kea, answer.mac_address, ip_obj, default_gateway,
+        kea, answer.mac_address, answer.ip_address, default_gateway,
         ftp_settings.host, initial_config_filepath, ftp_settings.host,
         firmware_filepath)
 
@@ -323,6 +321,7 @@ async def entries_partial_update(entry_id: int, req: EntryPatchRequest,
     vlans_changed = entry.modified_vlan_settings != req.modified_vlan_settings
     moves_changed = entry.port_movements != req.port_movements
     if ports_changed or vlans_changed or moves_changed:
+        logging.error('FULL CONFIG REBUILD')
         update_obj.modified_port_settings = req.modified_port_settings
         update_obj.modified_vlan_settings = req.modified_vlan_settings
         update_obj.port_movements = req.port_movements
@@ -331,9 +330,11 @@ async def entries_partial_update(entry_id: int, req: EntryPatchRequest,
                                f'{entry.ip_address.exploded}.cfg'
         full_template_filepath = f'{ftp_settings.templates_full_path}' \
                                  f'{model_obj.default_full_config}'
+        logging.error(full_template_filepath)
+        logging.error(full_config_filepath)
         async with ftp as ftp_instance:
             await utils.ztp.generate_full_config(
-                entry, model_obj, ftp_settings.tftp_folder,
+                req, model_obj, ftp_settings.tftp_folder,
                 full_template_filepath, full_config_filepath, netbox,
                 ftp_instance)
 

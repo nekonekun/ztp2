@@ -125,6 +125,8 @@ async def create_host_and_options(db: AsyncSession,
                                   cfg_filename: str,
                                   fw_tftp_server: str,
                                   fw_filename: str):
+    mac_address = ''.join(filter(lambda x: x in '0123456789abcdef',
+                                 mac_address.lower()))
     params = host_params(mac_address, ip_address)
     stmt = select(Host)
     stmt = stmt.where(and_(
@@ -164,13 +166,15 @@ async def kea_change_ip_address(db: AsyncSession,
                                 mac_address: str,
                                 ip_address: str,
                                 cfg_filename: str):
+    mac_address = ''.join(filter(lambda x: x in '0123456789abcdef',
+                                 mac_address.lower()))
     dhcp_identifier = hexstring_to_bytea(mac_address)
     stmt = select(Host).where(Host.dhcp_identifier == dhcp_identifier)
     response = await db.execute(stmt)
     host = response.scalars().first()
     if not host:
         return
-    host_id = host['host_id']
+    host_id = host.host_id
 
     # Update hosts table with new ip_address
     ip_address = int(ipaddress.IPv4Address(ip_address))
@@ -193,6 +197,8 @@ async def kea_change_ip_address(db: AsyncSession,
 async def kea_change_mac_address(db: AsyncSession,
                                  mac_address: str,
                                  new_mac_address: str):
+    mac_address = ''.join(filter(lambda x: x in '0123456789abcdef',
+                                 mac_address.lower()))
     dhcp_identifier = hexstring_to_bytea(mac_address)
     stmt = select(Host).where(Host.dhcp_identifier == dhcp_identifier)
     response = await db.execute(stmt)
