@@ -178,8 +178,18 @@ async def switch_to_screen(query: types.CallbackQuery,
         await state.set_data(data)
     elif callback_data.screen == 'main':
         ztp_id = data['id']
-        async with api_session.get(f'/entries/{ztp_id}/') as response:
-            entry = await response.json()
+        if callback_data.save:
+            update_params = {
+                key: value
+                for key, value in data.items()
+                if key[0] != '_'
+            }
+            async with api_session.patch(f'/entries/{ztp_id}/',
+                                         json=update_params) as response:
+                entry = await response.json()
+        else:
+            async with api_session.get(f'/entries/{ztp_id}/') as response:
+                entry = await response.json()
         data = await utils.make_switch_data(data['_msg'], data['_user'],
                                             data['_is_admin'], entry,
                                             api_session)
@@ -326,7 +336,6 @@ async def parent_edit(message: types.Message,
 @router.message(state=Manage.waiting_for_movements)
 async def parent_edit(message: types.Message,
                       state: FSMContext):
-
     new_movements = utils.extract_movements(message.text)
     if not new_movements:
         return
