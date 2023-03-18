@@ -1,4 +1,6 @@
 from scrapli.driver.core import AsyncIOSXEDriver
+from scrapli import AsyncScrapli
+import asyncio
 
 
 class DeviceTerminal:
@@ -17,6 +19,16 @@ class DeviceTerminal:
                 auth_password=self.password,
                 auth_secondary=self.enable,
                 auth_strict_key=False,
+                **kwargs
+            )
+        elif device_class == 'dlink_os':
+            return AsyncScrapli(
+                host=ip_address,
+                auth_username=self.username,
+                auth_password=self.password,
+                auth_secondary=self.enable,
+                transport='asynctelnet',
+                platform='dlink_os',
                 **kwargs
             )
         else:
