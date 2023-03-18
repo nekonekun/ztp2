@@ -8,16 +8,20 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from typing import Callable
 
 from ..progress import Progresser
-from ...db.models.ztp import Entry
+from ...db.models.ztp import Entry, Model
 from ...remote_apis.snmp import DeviceSNMP
 from ...remote_apis.terminal import DeviceTerminal
 from ...remote_apis.ftp import ContextedFTP
-from ...utils.ftp import pattern_in_file_content
-from ...utils.netbox import get_prefix_info
+from ...remote_apis.userside import UsersideAPI
+from ...utils.ftp import pattern_in_file_content, get_file_content
+from ...utils.netbox import get_prefix_info, mark_ip_active
 from ...utils.ztp import CiscoInterface, DlinkInterface
 from ...utils.server import create_entry, change_ip_address, change_mac_address
 from ...utils.sort_of_ping import check_port
-
+from ...utils.terminal import extract_dlink_serial
+from ...utils.userside import transfer_inventory_to_employee, \
+    get_inventory_item, transfer_inventory_to_node, update_commutation, \
+    update_up_down_link
 
 SNMP_DEVICE_PATTERNS = ['DES-', 'DGS-12', 'DGS-30', 'Extreme']
 CISCO_DEVICE_PATTERNS = ['Cisco']
@@ -40,7 +44,10 @@ class PreparedTask(Task):  # noqa
     snmp_factory = stub
     bot_token = stub
     netbox_factory = stub
+    userside_api = stub
     ftp_factory = stub
+    ftp_base_folder = stub
+    ftp_full_config_folder = stub
     loop: asyncio.BaseEventLoop | None = stub
 
     def before_start(self, task_id, args, kwargs):
@@ -257,3 +264,186 @@ def edit_dhcp_office_entry(self, entry_id: int, field: str, value: str):
             change_ip_address(entry_id, value, self.remote_filename, session)
         elif field == 'mac_address':
             change_mac_address(entry_id, value, self.remote_filename, session)
+
+
+@current_app.task(base=PreparedTask, name='ztp2_finalize', bind=True)
+def finalize(self, ztp_id: int, sender_chat_id: int):
+    full_configs_path = self.ftp_base_folder + self.ftp_full_config_folder
+    self.loop.run_until_complete(_finalize(ztp_id,
+                                           sender_chat_id,
+                                           self.bot_token,
+                                           self.sessionmaker_factory(),
+                                           self.terminal_factory,
+                                           self.ftp_factory,
+                                           full_configs_path,
+                                           self.netbox_factory,
+                                           self.userside_api))
+
+
+async def _finalize(ztp_id: int,
+                    sender_chat_id: int,
+                    bot_token: str,
+                    sessionmaker: async_sessionmaker,
+                    terminal_factory: DeviceTerminal,
+                    ftp_factory: Callable[[], ContextedFTP],
+                    configs_tftp_path: str,
+                    netbox_factory: Callable[[], aiohttp.ClientSession],
+                    userside_api: UsersideAPI):
+    # Получить информацию о свиче
+    progresser = Progresser(bot_token, sender_chat_id)
+    progresser.startup()
+    await progresser.greet(f'Свич {ztp_id}')
+    await progresser.send_step('Смотрим в базу')
+    async with sessionmaker() as session:
+        statement = select(Entry).where(Entry.id == ztp_id)
+        response = await session.execute(statement)
+        entry = response.scalars().first()
+    progresser.update_done(f'Узнали IP: {entry.ip_address}')
+
+    # Пингануть свич
+    await progresser.send_step('Проверяем, что свич пингуется')
+    if not await check_port(entry.ip_address.exploded):
+        progresser.update_done('Свич не пингуется на момент запуска команды')
+        await progresser.finish('Провалено')
+        await progresser.shutdown()
+        return
+    progresser.update_done('Свич пингуется на момент запуска команды')
+
+    # Проверить серийный номер
+    await progresser.send_step('Проверяем серийный номер')
+    session = terminal_factory(entry.ip_address.exploded, 'dlink_os')
+    async with session:
+        serial_number = await extract_dlink_serial(session)
+    if entry.serial_number != serial_number:
+        progresser.update_done('Серийный номер в базе и на свиче не совпадают')
+        await progresser.finish('Провалено')
+        await progresser.shutdown()
+        return
+    progresser.update_done('Серийный номер в базе и на железе совпадает')
+
+    # Получить конфиг
+    await progresser.send_step('Получаем конфиг')
+    async with ftp_factory() as ftp_client:
+        filename = configs_tftp_path + entry.ip_address.exploded + '.cfg'
+        cfg = await get_file_content(filename, ftp_client)
+    cfg = list(filter(lambda x: x, cfg.split('\n')))
+    line_count = len(cfg)
+    progresser.update_done(f'Получен конфиг из {line_count} строк')
+
+    # Отправить конфиг построчно
+    await progresser.send_step('Отправляем конфиг на свич')
+    session = terminal_factory(entry.ip_address.exploded, 'dlink_os')
+    async with session:
+        alert_chunks = 5
+        threshold = line_count // alert_chunks
+        percents = 100 // alert_chunks
+        multiplier = 1
+        for index, line in enumerate(cfg):
+            if index > threshold * multiplier:
+                percents_done = percents * multiplier
+                await progresser.send_step('Отправляем конфиг на свич '
+                                           f'(отправлено {percents_done}%)')
+                multiplier += 1
+            # await session.send_command(line)
+            await asyncio.sleep(0.05)
+    progresser.update_done('Отправили конфиг на свич')
+
+    # Проверить что свич пингуется после заливки конфига
+    await progresser.send_step('Проверяем, что свич пингуется')
+    if not await check_port(entry.ip_address.exploded):
+        progresser.update_done('Свич не пингуется после заливки конфига')
+        await progresser.finish('Провалено')
+        await progresser.shutdown()
+        return
+    progresser.update_done('Свич пингуется после заливки конфига')
+
+    # Исправить netbox, пометить айпишник Active
+    await progresser.send_step('Смотрим в Netbox')
+    async with netbox_factory() as session:
+        await mark_ip_active(entry.ip_address.exploded, session)
+    progresser.update_done('Установили статус IP адреса в Netbox\'е')
+
+    # Получить девайс в юзерсайде
+    await progresser.send_step('Ищем свич с таким IP адресом в Usersid\'е')
+    async with userside_api:
+        try:
+            old_device_id = await userside_api.device.get_device_id(
+                object_type='switch', data_typer='ip',
+                data_value=entry.ip_address.exploded)
+        except RuntimeError:
+            old_switch_present = False
+            progresser.update_done('Свича с таким IP в Usersid\'e не нашлось')
+        else:
+            old_switch_present = True
+            progresser.update_done('Нашли свич с таким IP в Usersid\'е')
+
+        if old_switch_present:
+            old_switch_data = await userside_api.device.get_data(
+                object_type='switch', object_id=old_device_id,
+                is_hide_ifaces_data=1)
+            old_switch_data = old_switch_data[str(old_device_id)]
+            # Запомнить коммутацию со старого свича
+            await progresser.send_step('Запоминаем коммутацию старого свича')
+            old_switch_commutation = await userside_api.commutation.get_data(
+                object_type='switch', object_id=old_device_id)
+            progresser.update_done('Запомнили коммутацию старого свича')
+
+            # Переместить старый свич на сотрудника
+            await progresser.send_step('Перемещаем старый свич на сотрудника')
+            await transfer_inventory_to_employee(
+                inventory_id=old_switch_data['inventory_id'],
+                employee_id=entry.employee_id,
+                userside_api=userside_api)
+            progresser.update_done('Переместили старый свич на сотрудника')
+
+        # Поставить новый свич в ящик
+        await progresser.send_step('Ставим новый свич в ящик')
+        mew_switch_inventory = await get_inventory_item(entry.serial_number,
+                                                        userside_api)
+        await transfer_inventory_to_node(mew_switch_inventory['id'],
+                                         entry.node_id,
+                                         entry.employee_id,
+                                         userside_api)
+        progresser.update_done('Поставили новый свич в ящик')
+
+        # Исправить айпишник и количество портов
+        await progresser.send_step('Устанавливаем IP и количество портов')
+        new_device_id = await userside_api.device.get_device_id(
+            object_type='switch',
+            data_typer='serial_number',
+            data_value=entry.serial_number
+        )
+        await userside_api.device.set_data(object_type='switch',
+                                           object_id=new_device_id,
+                                           param='ip',
+                                           value=entry.ip_address.exploded)
+        async with sessionmaker() as session:
+            statement = select(Model).where(Model.id == entry.model_id)
+            response = await session.execute(statement)
+            model = response.scalars().first()
+        await userside_api.device.set_data(object_type='switch',
+                                           object_id=new_device_id,
+                                           param='iface_count',
+                                           value=model.portcount)
+        progresser.update_done('Установили IP адрес и количество портов')
+
+        if old_switch_present:
+            # Восстановить коммутацию
+            await progresser.send_step('Восстанавливаем аплинки/даунлинки')
+            await update_up_down_link(
+                old_uplink=old_switch_data['uplink_iface'],
+                old_downlinks=old_switch_data['dnlink_iface'],
+                movements=entry.port_movements,
+                device_id=new_device_id,
+                userside_api=userside_api)
+            progresser.update_done('Восстановили аплинки/даунлинки')
+
+            await progresser.send_step('Восстанавливаем коммутацию')
+            await update_commutation(old_commutation=old_switch_commutation,
+                                     movements=entry.port_movements,
+                                     device_id=new_device_id,
+                                     userside_api=userside_api)
+            progresser.update_done('Восстановили коммутацию')
+
+    await progresser.finish('Готово')
+    await progresser.shutdown()

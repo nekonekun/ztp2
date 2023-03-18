@@ -7,6 +7,7 @@ from ..remote_apis.ftp import FtpFactory
 from ..remote_apis.snmp import DeviceSNMP
 from ..remote_apis.terminal import DeviceTerminal
 from ..remote_apis.server import ServerTerminalFactory
+from ..remote_apis.userside import UsersideAPI
 
 
 ENV_VAR_PREFIX = 'ZTP_'
@@ -34,6 +35,11 @@ def main():
     group.add_argument('--netbox-url', help='Netbox URL', required=True)
     group.add_argument('--netbox-token', help='Netbox RW token', required=True)
 
+    group = parser.add_argument_group('Userside')
+    group.add_argument('--userside-url',
+                       help='Userside URL (including api.php)', required=True)
+    group.add_argument('--userside-key', help='Userside key', required=True)
+
     group = parser.add_argument_group('SNMP')
     group.add_argument('--snmp-community-rw',
                        help='SNMP RW community (private)',
@@ -51,6 +57,10 @@ def main():
     group.add_argument('--ftp-host', help='FTP server hostname', required=True)
     group.add_argument('--ftp-username', help='FTP username', required=True)
     group.add_argument('--ftp-password', help='FTP password', required=True)
+    group.add_argument('--ftp-tftp-folder', help='Path to TFTP subdirectory',
+                       required=True)
+    group.add_argument('--ftp-configs-full-path',
+                       help='Path to full configs subdirectory', required=True)
 
     group = parser.add_argument_group('DHCP server')
     group.add_argument('--office-dhcp-host', help='Office DHCP server hostname',
@@ -86,8 +96,14 @@ def main():
     PreparedTask.netbox_factory = netbox_session_factory(args.netbox_url,
                                                          args.netbox_token)
 
+    PreparedTask.userside_api = UsersideAPI(args.userside_url,
+                                            args.userside_key)
+
     PreparedTask.ftp_factory = FtpFactory(args.ftp_host, args.ftp_username,
                                           args.ftp_password)
+
+    PreparedTask.ftp_base_folder = args.ftp_tftp_folder
+    PreparedTask.ftp_full_config_folder = args.ftp_configs_full_path
 
     RemoteFileModifyTask.server_ssh_factory = ServerTerminalFactory(
         ip_address=args.office_dhcp_host,
