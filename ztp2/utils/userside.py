@@ -123,3 +123,63 @@ async def transfer_inventory_to_employee(inventory_id: int,
     await userside_api.inventory.transfer_inventory(inventory_id=inventory_id,
                                                     dst_account=dst_account,
                                                     employee_id=employee_id)
+
+
+async def transfer_inventory_to_node(inventory_id: int,
+                                     node_id: int,
+                                     employee_id: int,
+                                     userside_api: UsersideAPI):
+    dst_account = InventoryStorage.Node.value \
+                  + SubAccount.Supplies.value \
+                  + str(node_id).zfill(7)
+    await userside_api.inventory.transfer_inventory(inventory_id=inventory_id,
+                                                    dst_account=dst_account,
+                                                    employee_id=employee_id)
+
+
+async def update_up_down_link(old_uplink: str,
+                              old_downlinks: str,
+                              movements: dict,
+                              device_id: int,
+                              userside_api: UsersideAPI):
+    uplinks = old_uplink.split(',')
+    uplinks = [movements.get(u, u) for u in uplinks]
+    uplinks = ','.join(uplinks)
+    downlinks = old_downlinks.split(',')
+    downlinks = [movements.get(u, u) for u in downlinks]
+    downlinks = ','.join(downlinks)
+    await userside_api.device.set_data(object_type='switch',
+                                       object_id=device_id,
+                                       param='downlink_port',
+                                       value=downlinks)
+    await userside_api.device.set_data(object_type='switch',
+                                       object_id=device_id,
+                                       param='uplink_port',
+                                       value=uplinks)
+
+
+async def update_commutation(old_commutation: dict,
+                             movements: dict,
+                             device_id: int,
+                             userside_api: UsersideAPI):
+    for port_index, commutation_data in old_commutation.items():
+        for neighbor in commutation_data:
+            if neighbor['object_type'] in ['fiber', 'cross']:
+                await userside_api.commutation.add(
+                    object_type='switch',
+                    object_id=device_id,
+                    object1_port=movements.get(port_index, port_index),
+                    object2_type=neighbor['object_type'],
+                    object2_id=neighbor['object_id'],
+                    object2_side=neighbor['direction'],
+                    object2_port=neighbor['interface'],
+                )
+            else:
+                await userside_api.commutation.add(
+                    object_type=neighbor['object_type'],
+                    object_id=neighbor['object_id'],
+                    object1_port=neighbor['interface'],
+                    object2_type='switch',
+                    object2_id=device_id,
+                    object2_port=movements.get(port_index, port_index)
+                )
