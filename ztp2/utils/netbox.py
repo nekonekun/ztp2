@@ -40,7 +40,8 @@ async def get_and_reserve_ip(prefix: str, session: aiohttp.ClientSession):
             if answer:
                 new_ip = answer[0]['address']
                 break
-    await session.post('/api/ipam/ip-addresses/', json={'address': new_ip})
+    await session.post('/api/ipam/ip-addresses/', json={'address': new_ip,
+                                                        'status': 'reserved'})
     new_ip_address = ipaddress.IPv4Interface(new_ip).ip.exploded
     return new_ip_address
 
@@ -73,3 +74,17 @@ async def get_default_gateway(ip: str, session: aiohttp.ClientSession):
     if len(possible_ips) != 1:
         raise
     return ipaddress.IPv4Interface(possible_ips[0]['address'])
+
+
+async def mark_ip_active(ip: str, session: aiohttp.ClientSession):
+    async with session.get('/api/ipam/ip-addresses/',
+                           params={'address': ip}) as response:
+        content = await response.json()
+    possible_ips = content['results']
+    if not possible_ips:
+        return
+    if len(possible_ips) != 1:
+        return
+    netbox_id = possible_ips[0]['id']
+    body = {'status': 'active'}
+    await session.patch(f'/api/ipam/ip-addresses/{netbox_id}/', json=body)
