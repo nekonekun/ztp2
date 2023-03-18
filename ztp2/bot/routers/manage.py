@@ -156,6 +156,10 @@ async def ztp_control(query: types.CallbackQuery,
         await utils.stop_ztp(api_session, data['celery_id'])
         data['celery_id'] = None
         await state.set_data(data)
+    elif action == 'finalize':
+        await utils.ztp_finalize(api_session,
+                                 data['id'],
+                                 query.message.chat.id)
     reply_markup = keyboards.main_keyboard(data['celery_id'] is not None)
     await data['_msg'].edit_reply_markup(reply_markup=reply_markup)
 

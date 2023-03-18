@@ -103,6 +103,17 @@ async def start_ztp(api_session: aiohttp.ClientSession,
     return content['task_id']
 
 
+async def ztp_finalize(api_session: aiohttp.ClientSession,
+                       ztp_id: int,
+                       sender_chat_id: int):
+    body = {'name': 'ztp2_finalize',
+            'args': [ztp_id, sender_chat_id],
+            'kwargs': {}}
+    async with api_session.post('/celery/', json=body) as response:
+        content = await response.json()
+    return content['task_id']
+
+
 async def stop_ztp(api_session: aiohttp.ClientSession,
                    celery_id: str):
     await api_session.delete(f'/celery/{celery_id}/')
