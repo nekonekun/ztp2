@@ -337,6 +337,10 @@ async def entries_partial_update(entry_id: int, req: EntryPatchRequest,
                 req, model_obj, ftp_settings.tftp_folder,
                 full_template_filepath, full_config_filepath, netbox,
                 ftp_instance)
+    if entry.parent_switch != req.parent_switch:
+        update_obj.parent_switch = req.parent_switch
+    if entry.parent_port != req.parent_port:
+        update_obj.parent_port = req.parent_port
 
     answer = await crud.entry.update(db=db, db_obj=entry, obj_in=update_obj)
     return answer
