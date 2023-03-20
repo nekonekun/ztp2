@@ -171,7 +171,7 @@ async def entries_create(req: EntryCreateRequest,
     else:
         port_settings = {
             str(port): {'description': '',
-                        'tagged': int(mgmt_id),
+                        'tagged': [int(mgmt_id)],
                         'untagged': [1]}
             for port in range(1, portcount + 1)
         }
