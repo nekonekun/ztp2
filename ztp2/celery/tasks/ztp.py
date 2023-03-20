@@ -344,8 +344,7 @@ async def _finalize(ztp_id: int,
                 await progresser.send_step('Отправляем конфиг на свич '
                                            f'(отправлено {percents_done}%)')
                 multiplier += 1
-            # await session.send_command(line)
-            await asyncio.sleep(0.05)
+            await session.send_command(line)
     progresser.update_done('Отправили конфиг на свич')
 
     # Проверить что свич пингуется после заливки конфига
