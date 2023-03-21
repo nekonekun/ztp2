@@ -123,6 +123,8 @@ async def entries_create(req: EntryCreateRequest,
                 vlan_settings[vlan_id] = vlan_name
         except aiosnmp.exceptions.SnmpTimeoutError:
             logging.error('Timeout while reading old switch vlans')
+        except (TypeError, ValueError, AttributeError):
+            logging.error('Some strange things happened here')
     new_object['vlan_settings'] = vlan_settings.copy()
     new_object['modified_vlan_settings'] = vlan_settings.copy()
 
@@ -148,6 +150,8 @@ async def entries_create(req: EntryCreateRequest,
                 req.ip_address.exploded, snmp_ro)
         except aiosnmp.exceptions.SnmpTimeoutError:
             logging.error('Timeout while reading old switch descriptions')
+        except (TypeError, ValueError, AttributeError):
+            logging.error('Some strange things happened here')
         else:
             for index, description in descriptions.items():
                 if index in port_settings:
@@ -161,6 +165,8 @@ async def entries_create(req: EntryCreateRequest,
                                                          snmp_ro)
         except aiosnmp.exceptions.SnmpTimeoutError:
             logging.error('Timeout while reading old switch vlans')
+        except (TypeError, ValueError, AttributeError):
+            logging.error('Some strange things happened here')
         else:
             for index, port_vlan in port_vlans.items():
                 if index in port_settings:
