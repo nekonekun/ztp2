@@ -337,6 +337,8 @@ async def entries_partial_update(entry_id: int, req: EntryPatchRequest,
                 req, model_obj, ftp_settings.tftp_folder,
                 full_template_filepath, full_config_filepath, netbox,
                 ftp_instance)
+    if req.parent_port or req.parent_switch:
+        update_obj.autochange_vlans = True
     if entry.parent_switch != req.parent_switch:
         update_obj.parent_switch = req.parent_switch
     if entry.parent_port != req.parent_port:
