@@ -7,7 +7,7 @@ import logging
 from .dependencies import ApiSessionFactory
 from .middlewares import ApiSessionMiddleware, AuthMiddleware, \
     UsersideMiddleware, ChatActionMiddleware
-from .routers import manage_router, add_router
+from .routers import manage_router, add_router, default_router
 from ..remote_apis.userside import UsersideAPI
 
 logging.basicConfig(level=logging.INFO)
@@ -62,6 +62,7 @@ async def bot_main(token: str, api_session_factory: ApiSessionFactory,
     bot = Bot(token=token, parse_mode='html')
     dp = Dispatcher(storage=MemoryStorage())
 
+    dp.include_router(default_router)
     dp.include_router(add_router)
     dp.include_router(manage_router)
 

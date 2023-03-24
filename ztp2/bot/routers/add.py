@@ -21,30 +21,30 @@ router = Router()
 logger = logging.getLogger("aiogram.event")
 
 
-@router.message(Command(commands=['add']))
-@flags.authorization
-async def start_add_process(message: types.Message,
-                            state: FSMContext,
-                            current_user: dict[str, str | int]):
-    try:
-        await message.delete()
-        data = {'_is_admin': True}
-    except aiogram.exceptions.TelegramBadRequest:
-        data = {'_is_admin': False}
-    data['employee_id'] = current_user['userside_id']
-    data['serial_number'] = None
-    data['mac_address'] = None
-    data['_duplicate'] = False
-    data['_user'] = current_user
-    text = utils.make_pre_mode_select_message(data)
-    reply_markup = keyboards.gathering_data_keyboard(
-        data['_user'] is not None,
-        data['serial_number'] is not None,
-        data['mac_address'] is not None)
-    msg = await message.answer(text=text, reply_markup=reply_markup)
-    data['_msg'] = msg
-    await state.set_data(data)
-    await state.set_state(PreMode.waiting_for_serial)
+# @router.message(Command(commands=['add']))
+# @flags.authorization
+# async def start_add_process(message: types.Message,
+#                             state: FSMContext,
+#                             current_user: dict[str, str | int]):
+#     try:
+#         await message.delete()
+#         data = {'_is_admin': True}
+#     except aiogram.exceptions.TelegramBadRequest:
+#         data = {'_is_admin': False}
+#     data['employee_id'] = current_user['userside_id']
+#     data['serial_number'] = None
+#     data['mac_address'] = None
+#     data['_duplicate'] = False
+#     data['_user'] = current_user
+#     text = utils.make_pre_mode_select_message(data)
+#     reply_markup = keyboards.gathering_data_keyboard(
+#         data['_user'] is not None,
+#         data['serial_number'] is not None,
+#         data['mac_address'] is not None)
+#     msg = await message.answer(text=text, reply_markup=reply_markup)
+#     data['_msg'] = msg
+#     await state.set_data(data)
+#     await state.set_state(PreMode.waiting_for_serial)
 
 
 @router.message(state=PreMode.waiting_for_serial)
@@ -275,6 +275,7 @@ async def confirm_check(query: types.CallbackQuery,
                         userside_api: UsersideAPI):
     await query.answer()
     data = await state.get_data()
+    await data['_msg'].delete_reply_markup()
     body = {'employeeId': data['_user']['userside_id'],
             'serial': data['serial_number'],
             'mac': data['mac_address']}

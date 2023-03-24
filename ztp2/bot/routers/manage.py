@@ -16,33 +16,33 @@ router = Router()
 logger = logging.getLogger("aiogram.event")
 
 
-@router.message(Command(commands=['manage']), state=None)
-@router.message(Command(commands=['manage']), state=Manage)
-@flags.is_using_api_session
-@flags.authorization
-async def show_switch_list(message: types.Message,
-                           state: FSMContext,
-                           api_session: aiohttp.ClientSession,
-                           current_user: dict[str, str | int]):
-    try:
-        await message.delete()
-        data = {'_is_admin': True}
-    except aiogram.exceptions.TelegramBadRequest:
-        data = {'_is_admin': False}
-    data['_filter_status'] = None
-    data['_filter_employee_id'] = current_user['userside_id']
-    data['_filter_limit'] = 10
-    switch_list = await utils.get_switch_list(
-        api_session,
-        employee_id=data['_filter_employee_id'],
-        limit=data['_filter_limit'])
-    text = utils.make_selecting_switch_message(switch_list, current_user)
-    reply_markup = keyboards.selecting_keyboard()
-    msg = await message.answer(text=text, reply_markup=reply_markup)
-    await state.set_state(Manage.selecting_switch)
-    data['_msg'] = msg
-    data['_user'] = current_user
-    await state.set_data(data)
+# @router.message(Command(commands=['manage']), state=None)
+# @router.message(Command(commands=['manage']), state=Manage)
+# @flags.is_using_api_session
+# @flags.authorization
+# async def show_switch_list(message: types.Message,
+#                            state: FSMContext,
+#                            api_session: aiohttp.ClientSession,
+#                            current_user: dict[str, str | int]):
+#     try:
+#         await message.delete()
+#         data = {'_is_admin': True}
+#     except aiogram.exceptions.TelegramBadRequest:
+#         data = {'_is_admin': False}
+#     data['_filter_status'] = None
+#     data['_filter_employee_id'] = current_user['userside_id']
+#     data['_filter_limit'] = 10
+#     switch_list = await utils.get_switch_list(
+#         api_session,
+#         employee_id=data['_filter_employee_id'],
+#         limit=data['_filter_limit'])
+#     text = utils.make_selecting_switch_message(switch_list, current_user)
+#     reply_markup = keyboards.selecting_keyboard()
+#     msg = await message.answer(text=text, reply_markup=reply_markup)
+#     await state.set_state(Manage.selecting_switch)
+#     data['_msg'] = msg
+#     data['_user'] = current_user
+#     await state.set_data(data)
 
 
 @router.callback_query(callbacks.SelectData.filter())
@@ -368,20 +368,21 @@ async def edit_configuration(query: types.CallbackQuery,
                              state: FSMContext,
                              callback_data: callbacks.ManageData):
     await query.answer()
+    data = await state.get_data()
     if callback_data.action == 'edit_descrs':
-        text = query.message.text
+        text = data['_msg'].text  # query.message.text
         text += '\n\nУкажи подписи в формате "{port} [{description}]"\n' \
                 'Если указать только номер порта -- подпись будет стёрта\n' \
                 'Можно указать сразу несколько, каждый с новой строки'
         await state.set_state(Manage.waiting_for_descriptions)
     elif callback_data.action == 'edit_vlans':
-        text = query.message.text
+        text = data['_msg'].text  # query.message.text
         text += '\n\nУкажи вланы в формате "{vid} [{name}]"\n' \
                 'Если указать только номер влана -- влан будет удалён\n' \
                 'Можно указать сразу несколько, каждый с новой строки'
         await state.set_state(Manage.waiting_for_vlans)
     elif callback_data.action == 'edit_ports':
-        text = query.message.text
+        text = data['_msg'].text  # query.message.text
         text += '\n\nУкажи вланы списком в dlink-формате'
         data = await state.get_data()
         data['_action'] = callback_data.params
