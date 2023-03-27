@@ -1,7 +1,7 @@
 from enum import Enum
 import re
 
-from ztp2.remote_apis.userside import UsersideAPI
+from ..remote_apis.userside import UsersideAPI
 
 
 class InventoryStorage(Enum):
@@ -53,7 +53,7 @@ async def get_task_prefixes(task_id: int, userside_api: UsersideAPI):
     management_prefix = None
     other_prefixes = []
     for chunk in specification.split(';'):
-        match = re.match(r'\d+\.\d+\.\d+\.\d+/\d+', chunk)
+        match = re.search(r'(\d+\.\d+\.\d+\.\d+/\d+)', chunk)
         if not match:
             continue
         prefix = match.group(1)
@@ -69,7 +69,7 @@ async def get_task_vlans(task_id: int, userside_api: UsersideAPI):
     additional_data = task_data['additional_data']
     target_field = additional_data['266']
     specification = target_field['value']
-    vlan_ids = re.findall(r'\[\d+]', specification)
+    vlan_ids = re.findall(r'\[(\d+)]', specification)
     return vlan_ids
 
 
