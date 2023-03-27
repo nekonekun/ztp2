@@ -19,6 +19,10 @@ logger = logging.getLogger("aiogram.event")
 @router.message(Command(commands=['cancel']))
 async def cancel(message: types.Message,
                  state: FSMContext):
+    data = await state.get_data()
+    await state.clear()
+    if data.get('_msg'):
+        await data['_msg'].delete_reply_markup()
     await state.clear()
 
 
