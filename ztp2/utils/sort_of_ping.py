@@ -18,7 +18,7 @@ async def check_port(ip_address: str, ports: list[int] | int = None):
                 timeout=1
             )
             return True
-        except asyncio.TimeoutError:
+        except (asyncio.TimeoutError, OSError):
             continue
         except ConnectionRefusedError:
             return True
