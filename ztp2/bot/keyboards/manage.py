@@ -67,8 +67,8 @@ def main_keyboard(is_ztp_started: bool):
             callback_data=ManageData(cat='ztp', action='finalize').pack()))
     builder.row(
         InlineKeyboardButton(
-            text='Другой свич',
-            callback_data=ScreenData(screen='select').pack()))
+            text='Показать информацию',
+            callback_data=ManageData(cat='util', action='show_info').pack()))
     return builder.as_markup()
 
 

@@ -219,3 +219,15 @@ def update_port_vlan_settings(original_settings: dict,
         original_settings[port]['untagged'] = sorted(list(set(untag)))
         original_settings[port]['tagged'] = sorted(list(set(tag)))
     return original_settings
+
+
+def make_final_info(entry: dict[str, Any]):
+    text = f'Модель: {entry["_model"]}\n'
+    text += f'IP-адрес: {entry["ip_address"]}\n'
+    text += f'Серийный номер: {entry["serial_number"]}\n'
+    text += f'MAC-адрес: {entry["mac_address"]}\n'
+    if movements := entry['port_movements']:
+        text += 'Переезды:\n'
+        for from_, to_ in movements.items():
+            text += f'{from_} -> {to_}\n'
+    return text
