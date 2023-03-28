@@ -22,24 +22,33 @@ async def get_prefix(ip: str, session: aiohttp.ClientSession):
 
 
 async def get_and_reserve_ip(prefix: str, session: aiohttp.ClientSession):
+    new_ip = None
     async with session.get('/api/ipam/prefixes',
                            params={'prefix': prefix}) as response:
         prefix_info = await response.json()
     prefix_info = prefix_info['results'][0]
-    vlan_info = prefix_info['vlan']
-    async with session.get('/api/ipam/prefixes',
-                           params={'vlan_id': vlan_info['id']}) as response:
-        prefixes_in_vlan = await response.json()
-    prefixes_in_vlan = prefixes_in_vlan['results']
-    new_ip = None
-    for prefix in prefixes_in_vlan:
-        async with session.get(
-                f'/api/ipam/prefixes/{prefix["id"]}/available-ips/'
-        ) as response:
-            answer = await response.json()
+    async with session.get(
+            f'/api/ipam/prefixes/{prefix_info["id"]}/available-ips/'
+    ) as main_response:
+        answer = await main_response.json()
+    if answer:
+        new_ip = answer[0]['address']
+    else:
+        vlan_info = prefix_info['vlan']
+        async with session.get('/api/ipam/prefixes',
+                               params={'vlan_id': vlan_info['id']}) as outer_response:
+            prefixes_in_vlan = await outer_response.json()
+        prefixes_in_vlan = prefixes_in_vlan['results']
+        for prefix in prefixes_in_vlan:
+            async with session.get(
+                    f'/api/ipam/prefixes/{prefix["id"]}/available-ips/'
+            ) as loop_response:
+                answer = await loop_response.json()
             if answer:
                 new_ip = answer[0]['address']
                 break
+    if not new_ip:
+        raise RuntimeError('No free ip left')
     await session.post('/api/ipam/ip-addresses/', json={'address': new_ip,
                                                         'status': 'reserved'})
     new_ip_address = ipaddress.IPv4Interface(new_ip).ip.exploded
