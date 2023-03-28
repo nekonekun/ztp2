@@ -1,4 +1,6 @@
 from aiogram import Bot
+from aiogram.exceptions import TelegramRetryAfter
+from asyncio import sleep
 
 
 class Progresser:
@@ -26,13 +28,23 @@ class Progresser:
     async def send_step(self, current_step: str):
         text = self.done + '☐ ' + current_step
         for chat_id, message_id in self.msg_ids.items():
-            await self.bot.edit_message_text(text, chat_id, message_id)
+            while True:
+                try:
+                    await self.bot.edit_message_text(text, chat_id, message_id)
+                    break
+                except TelegramRetryAfter as exc:
+                    await sleep(exc.retry_after)
 
     async def finish(self, goodbye_text: str):
         self.done += '☒ ' + goodbye_text
         text = self.done
         for chat_id, message_id in self.msg_ids.items():
-            await self.bot.edit_message_text(text, chat_id, message_id)
+            while True:
+                try:
+                    await self.bot.edit_message_text(text, chat_id, message_id)
+                    break
+                except TelegramRetryAfter as exc:
+                    await sleep(exc.retry_after)
 
     async def alert(self, alert_text):
         for chat_id, message_id in self.msg_ids.items():
