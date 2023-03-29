@@ -126,7 +126,13 @@ def flower():
     group.add_argument('--celery-broker', help='Broker URL', required=True)
     group.add_argument('--celery-result', help='Result backend', required=True)
 
+    group = parser.add_argument_group('Flower')
+    group.add_argument('--celery-flower-url-prefix',
+                       help='Flower URL prefix',
+                       default='/flower')
+
     args = parser.parse_args()
     app = celery.Celery(broker=args.celery_broker,
                         backend=args.celery_result)
-    app.start(argv=['flower'])
+    url_prefix = args.celery_flower_url_prefix
+    app.start(argv=['flower', f'--url_prefix={url_prefix}'])
