@@ -25,6 +25,7 @@ async def entries_create(req: EntryCreateRequest,
                          celery=Depends(celery_stub),
                          ftp_settings=Depends(ftp_settings_stub),
                          ftp=Depends(contexted_ftp_stub)):
+    logging.error(req)
     mount_type = req.mount_type
 
     # Common parameters
@@ -57,7 +58,7 @@ async def entries_create(req: EntryCreateRequest,
 
     # Node ID
     if mount_type == 'newHouse':
-        new_object['task_id'] = req.node_id
+        new_object['node_id'] = req.node_id
     else:
         new_object['node_id'] = await utils.get_node_id(req.ip_address.exploded,
                                                         userside_api)
@@ -109,7 +110,7 @@ async def entries_create(req: EntryCreateRequest,
             for prefix in task_prefixes:
                 vlan_id, vlan_name = await utils.netbox.get_vlan(prefix, netbox)
                 vlan_settings[vlan_id] = vlan_name
-        task_vlans = await utils.userside.get_task_vlans(req.task_id, netbox)
+        task_vlans = await utils.userside.get_task_vlans(req.task_id, userside_api)
         if task_vlans:
             for vlan in task_vlans:
                 vlan_id, vlan_name = await utils.netbox.get_vlan(vlan, netbox)
