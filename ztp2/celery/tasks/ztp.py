@@ -18,6 +18,7 @@ from ...utils.netbox import get_prefix_info, mark_ip_active
 from ...utils.ztp import CiscoInterface, DlinkInterface
 from ...utils.server import create_entry, change_ip_address, change_mac_address
 from ...utils.sort_of_ping import check_port
+from ...utils.ping import check
 from ...utils.terminal import extract_dlink_serial
 from ...utils.userside import transfer_inventory_to_employee, \
     get_inventory_item, transfer_inventory_to_node, update_commutation, \
@@ -178,7 +179,7 @@ async def _ztp(ztp_id: int,
         progresser.update_done('Человек нашел и настроил аплинк (скорее всего)')
 
     await progresser.send_step('Свич получает IP и опции по DHCP')
-    while not await check_port(entry.ip_address.exploded):
+    while not await check(entry.ip_address.exploded):
         await asyncio.sleep(CHECK_DELAY)
     progresser.update_done('Свич начал пинговаться')
 
@@ -236,7 +237,7 @@ async def _ztp(ztp_id: int,
 
     if not ztp_froze:
         await progresser.send_step('Свич ребутается после скачивания конфига')
-    while not await check_port(entry.ip_address.exploded):
+    while not await check(entry.ip_address.exploded):
         await asyncio.sleep(CHECK_DELAY)
     progresser.update_done('Свич начал пинговаться')
 
@@ -302,7 +303,7 @@ async def _finalize(ztp_id: int,
 
     # Пингануть свич
     await progresser.send_step('Проверяем, что свич пингуется')
-    if not await check_port(entry.ip_address.exploded):
+    if not await check(entry.ip_address.exploded):
         progresser.update_done('Свич не пингуется на момент запуска команды')
         await progresser.finish('Провалено')
         await progresser.shutdown()
@@ -349,7 +350,7 @@ async def _finalize(ztp_id: int,
 
     # Проверить что свич пингуется после заливки конфига
     await progresser.send_step('Проверяем, что свич пингуется')
-    if not await check_port(entry.ip_address.exploded):
+    if not await check(entry.ip_address.exploded):
         progresser.update_done('Свич не пингуется после заливки конфига')
         await progresser.finish('Провалено')
         await progresser.shutdown()
