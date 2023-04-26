@@ -3,6 +3,7 @@ import ipaddress
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import MACADDR
 from sqlalchemy import select, cast, desc
+from sqlalchemy.orm import selectinload
 
 from ...db.models.ztp import Entry
 from ..schemas.entries import EntryCreateRequest, EntryPatchRequest
@@ -16,6 +17,7 @@ class ConcreteCRUD(CRUDBase[Entry, EntryCreateRequest, EntryPatchRequest]):
                               ip_address: ipaddress.IPv4Address = None,
                               mac_address: str = None,
                               serial_number: str = None,
+                              task_id: int = None,
                               skip: int = 0, limit: int = 100) -> list[Entry]:
         statement = select(self._schema)
         if employee_id:
@@ -30,8 +32,12 @@ class ConcreteCRUD(CRUDBase[Entry, EntryCreateRequest, EntryPatchRequest]):
         if mac_address:
             statement = statement.where(
                 self._schema.mac_address == cast(mac_address, MACADDR))
+        if task_id:
+            statement = statement.where(self._schema.task_id == task_id)
         statement = statement.order_by(desc(self._schema.id))
         statement = statement.offset(skip).limit(limit)
+        statement = statement.options(selectinload(self._schema.model))
+        statement = statement.options(selectinload(self._schema.employee))
         response = await db.execute(statement)
         target_obj = response.scalars().all()
         return target_obj

@@ -4,6 +4,7 @@ from .routers.entries import entries_router
 from .routers.models import models_router
 from .routers.users import users_router
 from .routers.celery import celery_router
+from .routers.reports import reports_router
 
 
 def get_app(docs_url: str = '/docs', redoc_url: str = '/redoc') -> FastAPI:
@@ -19,4 +20,5 @@ def get_app(docs_url: str = '/docs', redoc_url: str = '/redoc') -> FastAPI:
     app.include_router(models_router, prefix='/models', tags=['Models'])
     app.include_router(users_router, prefix='/users', tags=['Users'])
     app.include_router(celery_router, prefix='/celery', tags=['Celery Tasks'])
+    app.include_router(reports_router, prefix='/reports', tags=['Reports'])
     return app

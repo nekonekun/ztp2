@@ -234,12 +234,14 @@ async def entries_list(skip: int = 0,
                        ip_address: ipaddress.IPv4Address = None,
                        mac_address: str = None,
                        serial_number: str = None,
+                       task_id: int = None,
                        db=Depends(ztp_db_session_stub)):
     entries = await crud.entry.read_by_clauses(db, employee_id=employee_id,
                                                status=status,
                                                ip_address=ip_address,
                                                mac_address=mac_address,
                                                serial_number=serial_number,
+                                               task_id=task_id,
                                                skip=skip, limit=limit)
     return entries
 

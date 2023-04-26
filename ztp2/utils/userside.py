@@ -183,3 +183,10 @@ async def update_commutation(old_commutation: dict,
                     object2_id=device_id,
                     object2_port=movements.get(port_index, port_index)
                 )
+
+
+async def get_node_name(node_id: int, userside_api: UsersideAPI):
+    nodes_data = await userside_api.node.get(id=node_id)
+    node_data = nodes_data[str(node_id)]
+    node_name = node_data['name']
+    return node_name
