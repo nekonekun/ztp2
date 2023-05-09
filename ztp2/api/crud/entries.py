@@ -1,4 +1,5 @@
 import ipaddress
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import MACADDR
@@ -11,6 +12,14 @@ from .base import CRUDBase
 
 
 class ConcreteCRUD(CRUDBase[Entry, EntryCreateRequest, EntryPatchRequest]):
+    async def read(self, db: AsyncSession, id: Any):
+        statement = select(self._schema).where(self._schema.id == id)
+        statement = statement.options(selectinload(self._schema.model))
+        statement = statement.options(selectinload(self._schema.employee))
+        response = await db.execute(statement)
+        target_obj = response.scalars().first()
+        return target_obj
+
     async def read_by_clauses(self, db: AsyncSession, *,
                               employee_id: int = None,
                               status: str = None,

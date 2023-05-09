@@ -2,6 +2,8 @@ from pydantic import BaseModel, Field, Extra
 from typing import Literal, Any, Optional
 import ipaddress
 import datetime
+from .models import Model
+from .users import User
 
 
 class EntryCreateRequest(BaseModel):
@@ -53,9 +55,11 @@ class Entry(BaseModel):
     status: Any = None
     celery_id: str = None
     employee_id: int
+    employee: User
     node_id: int
     serial_number: str
     model_id: int
+    model: Model
     mac_address: str
     ip_address: ipaddress.IPv4Address
     task_id: int = None
