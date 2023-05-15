@@ -3,7 +3,7 @@ from typing import Any
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import MACADDR
-from sqlalchemy import select, cast, desc, insert
+from sqlalchemy import select, cast, desc, insert, update, delete
 from sqlalchemy.orm import selectinload
 
 from ...db.models.ztp import Entry
@@ -66,6 +66,35 @@ class ConcreteCRUD(CRUDBase[Entry, EntryCreateRequest, EntryPatchRequest]):
         response = await db.execute(statement)
         target_obj = response.scalars().all()
         return target_obj
+
+    async def update(self, db: AsyncSession, *,
+                     db_obj: Entry,
+                     obj_in: EntryPatchRequest | dict[str, Any]
+    ) -> Entry:
+        obj_data = jsonable_encoder(db_obj)
+        if isinstance(obj_in, dict):
+            update_data = obj_in
+        else:
+            update_data = obj_in.dict(exclude_unset=True)
+        statement = update(self._schema)
+        statement = statement.where(self._schema.id == db_obj.id)
+        statement = statement.values(**update_data)
+        statement = statement.returning(self._schema)
+        statement = statement.options(selectinload(self._schema.model))
+        statement = statement.options(selectinload(self._schema.employee))
+        result = await db.execute(statement)
+        await db.commit()
+        return result.scalars().first()
+
+    async def delete(self, db: AsyncSession, *, id: int) -> Entry:
+        statement = delete(self._schema)
+        statement = statement.where(self._schema.id == id)
+        statement = statement.returning(self._schema)
+        statement = statement.options(selectinload(self._schema.model))
+        statement = statement.options(selectinload(self._schema.employee))
+        result = await db.execute(statement)
+        await db.commit()
+        return result.scalars().first()
 
 
 entry = ConcreteCRUD(Entry)
