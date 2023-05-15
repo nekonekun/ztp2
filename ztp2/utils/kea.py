@@ -19,6 +19,8 @@ def subnet_id(ip_address: ipaddress.IPv4Address) -> int:
         return 2
     elif ip_address in ipaddress.IPv4Network('10.0.0.0/16'):
         return 3
+    elif ip_address in ipaddress.IPv4Network('10.55.0.0/16'):
+        return 4
     raise
 
 
