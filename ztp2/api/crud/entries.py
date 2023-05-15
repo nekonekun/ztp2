@@ -1,9 +1,9 @@
 import ipaddress
 from typing import Any
-
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import MACADDR
-from sqlalchemy import select, cast, desc
+from sqlalchemy import select, cast, desc, insert
 from sqlalchemy.orm import selectinload
 
 from ...db.models.ztp import Entry
@@ -12,6 +12,22 @@ from .base import CRUDBase
 
 
 class ConcreteCRUD(CRUDBase[Entry, EntryCreateRequest, EntryPatchRequest]):
+    async def create(
+            self,
+            db: AsyncSession,
+            *,
+            obj_in: EntryCreateRequest
+    ) -> Entry:
+        obj_in_data = jsonable_encoder(obj_in)
+        statement = insert(self._schema)
+        statement = statement.values(**obj_in_data)
+        statement = statement.returning(self._schema)
+        statement = statement.options(selectinload(self._schema.model))
+        statement = statement.options(selectinload(self._schema.employee))
+        result = await db.execute(statement)
+        await db.commit()
+        return result.scalars().first()
+
     async def read(self, db: AsyncSession, id: Any):
         statement = select(self._schema).where(self._schema.id == id)
         statement = statement.options(selectinload(self._schema.model))
