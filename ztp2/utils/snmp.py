@@ -57,6 +57,7 @@ async def get_vlan_list(ip_address: str, snmp: DeviceSNMP):
     for element in response:
         vlan_id = element.oid.split('.')[-1]
         vlan_name = element.value.decode('utf-8')
+        vlan_name = vlan_name.replace('\x00', '')
         answer[vlan_id] = vlan_name
     return answer
 
