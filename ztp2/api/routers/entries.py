@@ -166,6 +166,12 @@ async def entries_create(req: EntryCreateRequest,
                                                          snmp_ro)
         except aiosnmp.exceptions.SnmpTimeoutError:
             logging.error('Timeout while reading old switch vlans')
+            port_settings = {
+                str(port): {'description': '',
+                            'tagged': [int(mgmt_id)],
+                            'untagged': []}
+                for port in range(1, portcount + 1)
+            }
         except (TypeError, ValueError, AttributeError):
             logging.error('Some strange things happened here')
         else:
@@ -179,7 +185,7 @@ async def entries_create(req: EntryCreateRequest,
         port_settings = {
             str(port): {'description': '',
                         'tagged': [int(mgmt_id)],
-                        'untagged': [1]}
+                        'untagged': []}
             for port in range(1, portcount + 1)
         }
     new_object['original_port_settings'] = port_settings.copy()
